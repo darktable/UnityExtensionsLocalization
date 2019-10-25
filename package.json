@@ -1,0 +1,21 @@
+{
+  "name": "com.yuyang.unity-extensions.localization",
+  "displayName": "Unity Extensions Localization",
+  "description": "This is a localization system based on excel sheets.",
+  "version": "0.0.1",
+  "unity": "2019.3",
+  "unityRelease": "0b8",
+  "author": {
+    "name": "Yu Yang",
+    "url": "https://github.com/yuyang9119"
+  },
+  "keywords": [
+    "extensions",
+    "localization"
+  ],
+  "type": "module",
+  "hideInEditor": false,
+  "dependencies": {
+    "com.yuyang.unity-extensions.common": "0.0.1"
+  }
+}
