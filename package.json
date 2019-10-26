@@ -13,9 +13,8 @@
     "extensions",
     "localization"
   ],
-  "type": "module",
-  "hideInEditor": false,
+  "type": "library",
   "dependencies": {
-    "com.yuyang.unity-extensions.common": "0.0.1"
+    "com.yuyang.unity-extensions.common": ""
   }
 }
