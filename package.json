@@ -15,6 +15,7 @@
   ],
   "type": "library",
   "dependencies": {
-    "com.yuyang.unity-extensions.common": ""
+    "com.yuyang.unity-extensions.common": "",
+    "com.yuyang.unity-extensions.excel-data-reader": ""
   }
 }
