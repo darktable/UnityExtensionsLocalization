@@ -1,0 +1,17 @@
+{
+    "name": "YuYang.UnityExtensions.Localization.Editor",
+    "references": [
+        "GUID:a32862b2e3d222642bcc42f019bf4de1"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
