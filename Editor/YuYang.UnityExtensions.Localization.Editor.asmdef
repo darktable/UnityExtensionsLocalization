@@ -1,7 +1,7 @@
 {
     "name": "YuYang.UnityExtensions.Localization.Editor",
     "references": [
-        "GUID:a32862b2e3d222642bcc42f019bf4de1"
+        "GUID:c309ec749dc9952448566f88dfcb37e3"
     ],
     "includePlatforms": [
         "Editor"
