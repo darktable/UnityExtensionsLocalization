@@ -2,326 +2,592 @@
 using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
 
 namespace UnityExtensions.Localization
 {
-    // 字体数据
-    public struct FontData
+    public enum TaskType
     {
-        public string name;
-        public string extraInformation;
+        LoadMeta,
+        LoadLanguage
+    }
+
+
+    public enum TaskResult
+    {
+        Success,
+        Cancel,
+        Failure,
     }
 
 
     /// <summary>
-    /// 本地化管理器
+    /// Localization Manager
     /// </summary>
     public partial struct LocalizationManager
     {
+        const string targetFolder = "Localization";
+        const string metaFileName = "meta";
+        const float waitToDisposeThread = 8;
 
+        // meta 文件中的数据
+        static (string type, string[] attributes)[] _languages;
+        static Dictionary<string, int> _languageIndices;
+        static Dictionary<string, int> _attributeIndices;
+        static Dictionary<string, int> _textIndices;
 
-        // 样式数据
-        struct StyleData
-        {
-            public int fontIndex;
-            public float fontSize;
-            public int fontStyle;
-            public float characterSpacing;
-            public float wordSpacing;
-            public float lineSpacing;
-            public float paragraphSpacing;
-
-            //const int boldBit = 0;
-            //const int italicBit = 1;
-            //const int underlineBit = 2;
-            //const int lowerBit = 3;
-            //const int upperBit = 4;
-            //const int smallcapsBit = 5;
-            //const int strikethroughBit = 6;
-        }
-
-        // 语言数据
-        struct LanguageData
-        {
-            public string type;
-            public string name;
-            public StyleData[] styles;
-        }
-
-        // 文本数据
-        struct TextData
-        {
-            public int textIndex;
-            public int styleIndex;               // can be -1
-        }
-
-
-        static FontData[] _fonts;
-        static LanguageData[] _languages;
-        static Dictionary<string, TextData> _textNames;
+        // 语言包中的数据
         static string[] _texts;
 
-        static bool _configurationLoaded = false;
-        static int _languageIndex = -1;
+        // -2: 未加载；-1：已加载meta；>= 0：已加载语言
+        static int _languageIndex = -2;
+
+        // 异步加载任务队列
+        static AsyncTaskQueue<LoadTask> _taskQueue = new AsyncTaskQueue<LoadTask>();
 
 
-        public delegate void OnResourcesChange(FontData[] unused, FontData[] )
-
-
-        /// <summary>
-        /// 语言发生改变前触发, arg1: old language, index(first time is -1), arg2: new index
-        /// </summary>
-        public static event Action<FontData[]> onResourcesChange;
-
-
-        /// <summary>
-        /// 语言发生改变时触发, arg1: old index(first time is -1), arg2: new index
-        /// </summary>
-        public static event Action<int, int> onLanguageChanged;
-
-
-        /// <summary>
-        /// 语言发生改变时触发（在 onLanguageChanged 之后触发）, arg1: old index(first time is -1), arg2: new index
-        /// </summary>
-        public static event Action<int, int> onLanguageChangedLate;
-
-
-        /// <summary>
-        /// 语言总数
-        /// </summary>
-        public static int languageCount
+        // Load Task
+        abstract class LoadTask : IQueuedTask<LoadTask>
         {
-            get
+            public abstract TaskType type { get; }
+            public abstract string detail { get; }
+            public abstract bool canceled { get; }
+            public abstract bool succeeded { get; }
+            public abstract void Cancel();
+            public abstract void Commit();
+            public abstract void Process();
+            public abstract bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current);
+
+            void IQueuedTask<LoadTask>.AfterComplete()
             {
-                EnsureConfigurationLoaded();
-                return _languages.Length;
+                if (succeeded) Commit();
+
+                asyncTaskCompleted?.Invoke(type, canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure), detail);
+
+                if (succeeded) UpdateContents();
             }
         }
 
 
-        /// <summary>
-        /// 当前语言名称 (default is empty)
-        /// </summary>
-        public static string languageName
-            => _languageIndex < 0 ? string.Empty : _languages[_languageIndex].name;
-
-
-        /// <summary>
-        /// 当前语言 Index (default is -1)
-        /// 用户使用语言列表切换语言时使用
-        /// 切换语言同时加载新语言使用到的所有字体、并卸载不再使用的所有字体
-        /// 换语言会触发 onLanguageChanged
-        /// </summary>
-        public static int languageIndex
+        // Load Meta Task
+        class LoadMetaTask : LoadTask
         {
-            get => _languageIndex;
-            set
+            bool _forceReload;
+
+            protected (string type, string[] attributes)[] _languages;
+            protected Dictionary<string, int> _languageIndices;
+            protected Dictionary<string, int> _attributeIndices;
+            protected Dictionary<string, int> _textIndices;
+
+            protected volatile bool _canceled;
+            protected volatile bool _succeeded;
+
+
+            public override TaskType type => TaskType.LoadMeta;
+
+            public override string detail => metaFileName;
+
+            public override bool canceled => _canceled;
+
+            public override bool succeeded => _succeeded;
+
+            public LoadMetaTask(bool forceReload)
             {
-                EnsureConfigurationLoaded();
-                EnsureLanguageLoaded(value);
+                _forceReload = forceReload;
             }
-        }
 
-
-        /// <summary>
-        /// 当前语言类型 (default is empty)
-        /// 第一次打开游戏时，可根据系统语言调用此方法；可用于存储用户配置
-        /// 切换语言同时加载新语言使用到的所有字体、并卸载不再使用的所有字体
-        /// 换语言会触发 onLanguageChanged
-        /// </summary>
-        public static string languageType
-        {
-            get => _languageIndex < 0 ? string.Empty : _languages[_languageIndex].type;
-            set
+            public override void Cancel()
             {
-                LoadConfiguration();
-                int index = Array.FindIndex(_languages, lang => lang.type == value);
-                LoadLanguage(index);
+                _canceled = true;
             }
-        }
 
+            public override void Commit()
+            {
+                LocalizationManager._languages = _languages;
+                LocalizationManager._languageIndices = _languageIndices;
+                LocalizationManager._attributeIndices = _attributeIndices;
+                LocalizationManager._textIndices = _textIndices;
+                _texts = null;
+                _languageIndex = -1;
+            }
 
-        // 确保配置已加载
-        static bool EnsureConfigurationLoaded(bool forceReload = false)
-        {
-            if (!_configurationLoaded || forceReload)
+            public override void Process()
             {
                 try
                 {
-                    var path = $"{Application.streamingAssetsPath}/Localization/Configuration";
-                    using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
+                    if (!_canceled)
                     {
-                        using (var reader = new BinaryReader(stream))
+                        var path = $"{Application.streamingAssetsPath}/{targetFolder}/{metaFileName}";
+                        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
                         {
-                            _fonts = new FontData[reader.ReadInt32()];
-                            for (int i = 0; i < _fonts.Length; i++)
+                            using (var reader = new BinaryReader(stream))
                             {
-                                _fonts[i].name = reader.ReadString();
-                                _fonts[i].extraInformation = reader.ReadString();
-                            }
+                                int attributeCount = reader.ReadInt32();
+                                int textCount = reader.ReadInt32();
 
-                            _languages = new LanguageData[reader.ReadInt32()];
-                            for (int i = 0; i < _languages.Length; i++)
-                            {
-                                _languages[i].type = reader.ReadString();
-                                _languages[i].name = reader.ReadString();
-
-                                _languages[i].styles = new StyleData[reader.ReadInt32()];
-                                for (int j = 0; j < _languages[i].styles.Length; j++)
+                                _attributeIndices = new Dictionary<string, int>(attributeCount);
+                                for (int i = 0; i < attributeCount; i++)
                                 {
-                                    _languages[i].styles[j].fontIndex = reader.ReadInt32();
-                                    _languages[i].styles[j].fontSize = reader.ReadSingle();
-                                    _languages[i].styles[j].fontStyle = reader.ReadInt32();
-                                    _languages[i].styles[j].characterSpacing = reader.ReadSingle();
-                                    _languages[i].styles[j].wordSpacing = reader.ReadSingle();
-                                    _languages[i].styles[j].lineSpacing = reader.ReadSingle();
-                                    _languages[i].styles[j].paragraphSpacing = reader.ReadSingle();
+                                    if (_canceled) break;
+                                    _attributeIndices.Add(reader.ReadString(), i);
                                 }
-                            }
 
-                            int textCount = reader.ReadInt32();
-                            _textNames = new Dictionary<string, TextData>(textCount);
-                            _texts = new string[textCount];
-                            TextData textData;
-                            for (int i = 0; i < textCount; i++)
-                            {
-                                string name = reader.ReadString();
-                                textData.textIndex = reader.ReadInt32();
-                                textData.styleIndex = reader.ReadInt32();
-                                _textNames.Add(name, textData);
+                                _textIndices = new Dictionary<string, int>(textCount);
+                                for (int i = 0; i < textCount; i++)
+                                {
+                                    if (_canceled) break;
+                                    _textIndices.Add(reader.ReadString(), i);
+                                }
+
+                                _languages = new (string, string[])[reader.ReadInt32()];
+                                _languageIndices = new Dictionary<string, int>(_languages.Length);
+                                for (int i = 0; i < _languages.Length; i++)
+                                {
+                                    if (_canceled) break;
+                                    _languages[i].type = reader.ReadString();
+                                    _languageIndices.Add(_languages[i].type, i);
+                                    _languages[i].attributes = new string[attributeCount];
+                                    for (int j = 0; j < attributeCount; j++)
+                                    {
+                                        if (_canceled) break;
+                                        _languages[i].attributes[j] = reader.ReadString();
+                                    }
+                                }
                             }
                         }
                     }
-
-                    Array.Sort(_languages, (a, b) => string.CompareOrdinal(a.name, b.name));
-                    _configurationLoaded = true;
+                    _succeeded = !_canceled;
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    _configurationLoaded = false;
+                    Debug.LogException(e);
                 }
             }
-            return _configurationLoaded;
+
+            public override bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current)
+            {
+                if (!_forceReload)
+                {
+                    if (_languageIndex > -2)
+                    {
+                        Cancel();
+                        return true;
+                    }
+                    else
+                    {
+                        int id = tasks.first;
+                        while (id != current)
+                        {
+                            var task = tasks[id];
+                            id = tasks.GetNext(id);
+
+                            if (task.type == TaskType.LoadMeta && task.succeeded)
+                            {
+                                Cancel();
+                                return true;
+                            }
+                        }
+
+                        while (id != -1)
+                        {
+                            var task = tasks[id];
+                            id = tasks.GetNext(id);
+
+                            if (task.type == TaskType.LoadMeta && !task.canceled)
+                            {
+                                Cancel();
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                foreach (var task in tasks)
+                {
+                    task.Cancel();
+                }
+
+                return true;
+            }
         }
 
 
-        // 确保指定语言已加载
-        static bool EnsureLanguageLoaded(int index, bool forceReload = false)
+        // Load Language Task
+        class LoadLanguageTask : LoadTask
         {
-            if (_languageIndex != index || forceReload)
+            bool _forceReload;
+
+            protected string _languageType;
+            protected string[] _texts;
+
+            protected volatile bool _canceled;
+            protected volatile bool _succeeded;
+
+            public override TaskType type => TaskType.LoadLanguage;
+
+            public override string detail => _languageType;
+
+            public override bool canceled => _canceled;
+
+            public override bool succeeded => _succeeded;
+
+            public override void Cancel()
+            {
+                _canceled = true;
+            }
+
+            public LoadLanguageTask(string languageType, bool forceReload)
+            {
+                _languageType = languageType;
+                _forceReload = forceReload;
+            }
+
+            public override void Commit()
+            {
+                LocalizationManager._texts = _texts;
+                _languageIndex = _languageIndices[_languageType];
+            }
+
+            public override void Process()
             {
                 try
                 {
-                    // load language pack
-                    var path = $"{Application.streamingAssetsPath}/Localization/{_languages[index].type}";
-                    using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
+                    if (!_canceled)
                     {
-                        using (var reader = new BinaryReader(stream))
+                        var path = $"{Application.streamingAssetsPath}/{targetFolder}/{_languageType}";
+                        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
                         {
-                            for (int i = 0; i < _texts.Length; i++)
+                            using (var reader = new BinaryReader(stream))
                             {
-                                _texts[i] = reader.ReadString();
+                                _texts = new string[reader.ReadInt32()];
+                                for (int i = 0; i < _texts.Length; i++)
+                                {
+                                    if (_canceled) break;
+                                    _texts[i] = reader.ReadString();
+                                }
                             }
                         }
                     }
-
-                    // find used fonts
-                    bool[] _fontInUse = new bool[_fonts.Length];
-                    StyleData[] styles = _languages[index].styles;
-                    for (int i = 0; i < styles.Length; i++)
-                    {
-                        _fontInUse[styles[i].fontIndex] = true;
-                    }
-
-                    // load/unload font assets
-                    for (int i = 0; i < _fontInUse.Length; i++)
-                    {
-                        if (_fontInUse[i])
-                        {
-                            if (_fonts[i].font == null)
-                            {
-                                if (string.IsNullOrEmpty(_fonts[i].resourcePath))
-                                {
-#if TEXT_MESH_PRO
-                                // not supported
-#else
-                                    _fonts[i].font = Font.CreateDynamicFontFromOSFont((string)null, 24);
-#endif
-                                }
-                                else
-                                {
-                                    _fonts[i].font = Resources.Load<Font>(_fonts[i].resourcePath);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            if (_fonts[i].font != null)
-                            {
-                                if (string.IsNullOrEmpty(_fonts[i].resourcePath))
-                                {
-#if TEXT_MESH_PRO
-                                // not supported
-#else
-                                    Font.Destroy(_fonts[i].font);
-#endif
-                                }
-                                else
-                                {
-                                    Resources.UnloadAsset(_fonts[i].font);
-                                }
-                                _fonts[i].font = null;
-                            }
-                        }
-                    }
+                    _succeeded = !_canceled;
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    Debug.LogException(e);
+                }
+            }
 
+            public override bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current)
+            {
+                if (!_forceReload)
+                {
+                    if (_languageIndex >= 0 && _languages[_languageIndex].type == _languageType)
+                    {
+                        Cancel();
+                        return true;
+                    }
+                    else
+                    {
+                        int id = tasks.first;
+                        while (id != current)
+                        {
+                            var task = tasks[id];
+                            id = tasks.GetNext(id);
+
+                            if (task.detail == _languageType && task.succeeded)
+                            {
+                                Cancel();
+                                return true;
+                            }
+                        }
+
+                        while (id != -1)
+                        {
+                            var task = tasks[id];
+                            id = tasks.GetNext(id);
+
+                            if (task.detail == _languageType && !task.canceled)
+                            {
+                                Cancel();
+                                return true;
+                            }
+                        }
+                    }
                 }
 
-                int lastIndex = _languageIndex;
-                _languageIndex = index;
-                onLanguageChanged?.Invoke(lastIndex, index);
-                onLanguageChangedLate?.Invoke(lastIndex, index);
+                foreach (var task in tasks)
+                {
+                    if (task.type == TaskType.LoadLanguage) task.Cancel();
+                }
 
-                // 趁游戏卡住了顺便整理下内存
-                GC.Collect();
+                return true;
+            }
+        }
+
+
+#if UNITY_EDITOR
+
+        class LoadExcelMetaTask : LoadMetaTask
+        {
+            volatile bool _buildCompleted;
+
+            public LoadExcelMetaTask(bool buildCompleted, bool forceReload) : base(forceReload)
+            {
+                _buildCompleted = buildCompleted;
+            }
+
+            public override void Process()
+            {
+                if (!_canceled)
+                {
+                    if (!_buildCompleted) Editor.LanguagePacker.ReadExcels();
+                    var (languageTexts, languageTypes, textNames, attributeCount) = Editor.LanguagePacker.data;
+
+                    if (!_canceled && languageTexts != null)
+                    {
+                        _attributeIndices = new Dictionary<string, int>(attributeCount);
+                        for (int i = 0; i < attributeCount; i++)
+                        {
+                            _attributeIndices.Add(textNames[i], i);
+                        }
+
+                        _textIndices = new Dictionary<string, int>(textNames.Count - attributeCount);
+                        for (int i = attributeCount; i < textNames.Count; i++)
+                        {
+                            _textIndices.Add(textNames[i], i - attributeCount);
+                        }
+
+                        _languages = new (string, string[])[languageTypes.Count];
+                        _languageIndices = new Dictionary<string, int>(_languages.Length);
+                        for (int i = 0; i < _languages.Length; i++)
+                        {
+                            _languages[i].type = languageTypes[i];
+                            _languageIndices.Add(_languages[i].type, i);
+                            _languages[i].attributes = new string[attributeCount];
+                            var textList = languageTexts[_languages[i].type];
+                            for (int j = 0; j < attributeCount; j++)
+                            {
+                                _languages[i].attributes[j] = textList[j];
+                            }
+                        }
+
+                        _succeeded = !_canceled;
+                    }
+                }
+            }
+        }
+
+
+        class LoadExcelLanguageTask : LoadLanguageTask
+        {
+            public LoadExcelLanguageTask(string languageType, bool forceReload) : base(languageType, forceReload)
+            {
+            }
+
+            public override void Process()
+            {
+                if (!_canceled)
+                {
+                    var (languageTexts, _, textNames, attributeCount) = Editor.LanguagePacker.data;
+
+                    if (languageTexts != null)
+                    {
+                        _texts = new string[textNames.Count - attributeCount];
+                        var textList = languageTexts[_languageType];
+
+                        for (int i = 0; i < _texts.Length; i++)
+                        {
+                            _texts[i] = textList[i + attributeCount];
+                        }
+
+                        _succeeded = !_canceled;
+                    }
+                }
+            }
+        }
+
+
+        public static void LoadExcelMetaAsync(bool buildCompleted = false, bool forceReload = false)
+        {
+            var task = new LoadExcelMetaTask(buildCompleted, forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+
+        public static void LoadExcelLanguageAsync(string languageType, bool forceReload = false)
+        {
+            var task = new LoadExcelLanguageTask(languageType, forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+
+        public static void LoadExcelLanguageAsync(int languageIndex, bool forceReload = false)
+        {
+            var languageType = _languages[languageIndex].type;
+            var task = new LoadExcelLanguageTask(languageType, forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+#endif
+
+
+        /// <summary>
+        /// 异步加载任务完成时触发
+        /// </summary>
+        public static event Action<TaskType, TaskResult, string> asyncTaskCompleted;
+
+
+        /// <summary>
+        /// 当前语言类型 (default Empty)，可用于存储用户的语言设置
+        /// </summary>
+        public static string languageType => _languageIndex < 0 ? string.Empty : _languages[_languageIndex].type;
+
+
+        /// <summary>
+        /// 当前语言 Index (default -1)，可用于显示语言列表时高亮当前语言
+        /// </summary>
+        public static int languageIndex => _languageIndex < 0 ? -1 : _languageIndex;
+
+
+        public static bool isMetaLoaded => _languageIndex > -2;
+
+
+        public static bool isLanguageLoaded => _languageIndex >= 0;
+
+
+        public static bool isLoading => _taskQueue.hasTask;
+
+
+        /// <summary>
+        /// 语言总数，可用于显示语言列表（default 0）
+        /// </summary>
+        public static int languageCount => _languageIndex > -2 ? _languages.Length : 0;
+
+
+        /// <summary>
+        /// 开始加载本地化的基本信息，应该尽可能早的调用
+        /// </summary>
+        /// <param name="forceReload"></param>
+        public static void LoadMetaAsync(bool forceReload = false)
+        {
+            var task = new LoadMetaTask(forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+
+        /// <summary>
+        /// 开始加载一种语言，必须在 LoadMetaAsync 调用后调用
+        /// 用于在开始游戏时通过玩家配置或系统配置设置语言
+        /// </summary>
+        /// <param name="languageIndex"></param>
+        /// <param name="forceReload"></param>
+        public static void LoadLanguageAsync(string languageType, bool forceReload = false)
+        {
+            var task = new LoadLanguageTask(languageType, forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+
+        /// <summary>
+        /// 开始加载一种语言，必须在 meta 加载完成后调用
+        /// 用于在游戏中通过语言列表切换语言
+        /// </summary>
+        /// <param name="languageIndex"></param>
+        /// <param name="forceReload"></param>
+        public static void LoadLanguageAsync(int languageIndex, bool forceReload = false)
+        {
+            var languageType = _languages[languageIndex].type;
+            var task = new LoadLanguageTask(languageType, forceReload);
+            _taskQueue.Enqueue(task, waitToDisposeThread);
+        }
+
+
+        public static void UnloadLanguage()
+        {
+            if (_languageIndex >= 0)
+            {
+                _languageIndex = -1;
+                _texts = null;
             }
         }
 
 
         /// <summary>
-        /// 获取语言类型
+        /// 获取语言类型，必须在 meta 加载完成后调用
         /// </summary>
-        public static string GetLanguageType(int index)
+        /// <param name="languageIndex"></param>
+        /// <returns></returns>
+        public static string GetLanguageType(int languageIndex)
         {
-            LoadConfiguration();
-            return _languages[index].type;
+            return _languages[languageIndex].type;
         }
 
 
         /// <summary>
-        /// 获取语言名称
+        /// 获取语言 Index，必须在 meta 加载完成后调用
         /// </summary>
-        public static string GetLanguageName(int index)
+        /// <param name="languageType"></param>
+        /// <returns></returns>
+        public static int GetLanguageIndex(string languageType)
         {
-            LoadConfiguration();
-            return _languages[index].name;
+            return _languageIndices[languageType];
         }
 
 
         /// <summary>
-        /// 根据文本名称获取文本内容（必须先设置一种语言）
+        /// 获取语言属性，必须在 meta 加载完成后调用
+        /// 返回 null 表示属性不存在
         /// </summary>
-        public static string GetText(string name)
+        /// <param name="languageIndex"></param>
+        /// <param name="attributeName"></param>
+        /// <returns></returns>
+        public static string GetLanguageAttribute(int languageIndex, string attributeName)
         {
-            return _texts[_textNames[name].textIndex];
+            return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
+                ? _languages[languageIndex].attributes[index] : null;
         }
 
 
+        /// <summary>
+        /// 获取语言属性，必须在 meta 加载完成后调用
+        /// 返回 null 表示属性不存在
+        /// </summary>
+        /// <param name="languageType"></param>
+        /// <param name="attributeName"></param>
+        /// <returns></returns>
+        public static string GetLanguageAttribute(string languageType, string attributeName)
+        {
+            return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
+                ? _languages[_languageIndices[languageType]].attributes[index] : null;
+        }
 
+
+        /// <summary>
+        /// 获取一个唯一的名字对应的文本，必须要在加载一种语言之后调用
+        /// 返回 null 表示文本不存在
+        /// </summary>
+        /// <param name="textName"></param>
+        /// <returns></returns>
+        public static string GetText(string textName)
+        {
+            return (textName != null && _textIndices.TryGetValue(textName, out int index)) ? _texts[index] : null;
+        }
+
+
+        public static void Quit()
+        {
+            _taskQueue.ForEach(task => task.Cancel());
+            _taskQueue.ClearUnprocessed();
+            _taskQueue.Dispose();
+
+            _languages = null;
+            _languageIndices = null;
+            _attributeIndices = null;
+            _textIndices = null;
+            _texts = null;
+
+            _languageIndex = -2;
+        }
 
     } // struct LocalizationManager
 
-} // namespace UnityExtensions
+} // namespace UnityExtensions.Localization

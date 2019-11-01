@@ -11,11 +11,27 @@ namespace UnityExtensions.Localization.Editor
 {
     static class LanguagePacker
     {
-        static char[] _disallowedCharsInName = { '{', '}', '\\', '\n', '\t' };
+        const string sourceFolder = "Localization";
+        const string targetFolder = "Assets/StreamingAssets/Localization";
+        const string metaFileName = "meta";
+        const string languageName = "#LanguageName";
+        static char[] disallowedCharsInName = { '{', '}', '\\', '\n', '\t' };
 
-        static Dictionary<string, List<string>> _languages;
-        static List<string> _textNames;
+        static Dictionary<string, List<string>> _languageTexts;
+        static List<string> _languageTypes;
         static Dictionary<string, int> _textIndices;
+        static List<string> _textNames;
+        static int _attributeCount;
+
+
+        internal static
+            (
+                Dictionary<string, List<string>> languageTexts,
+                List<string> languageTypes,
+                List<string> textNames,
+                int attributeCount
+            )
+        data => (_languageTexts, _languageTypes, _textNames, _attributeCount);
 
 
         static void ReadExcel(string path)
@@ -33,7 +49,7 @@ namespace UnityExtensions.Localization.Editor
                 {
                     var languageType = ExcelHelper.GetTrimmedString(i);
 
-                    if (!_languages.TryGetValue(languageType, out var texts))
+                    if (!_languageTexts.TryGetValue(languageType, out var texts))
                     {
                         // 添加新语言时，未曾初始化的文本先填充为 null
                         texts = new List<string>(Math.Max(_textNames.Count * 2, 256));
@@ -41,7 +57,8 @@ namespace UnityExtensions.Localization.Editor
                         {
                             texts.Add(null);
                         }
-                        _languages.Add(languageType, texts);
+                        _languageTexts.Add(languageType, texts);
+                        _languageTypes.Add(languageType);
                     }
                     languageTexts[i - 1] = texts;
                 }
@@ -53,7 +70,7 @@ namespace UnityExtensions.Localization.Editor
                     var name = ExcelHelper.GetString(0)?.Trim();
                     if (string.IsNullOrEmpty(name)) continue;   // 跳过无名字的行（注释行）
 
-                    if (name.IndexOfAny(_disallowedCharsInName) >= 0)
+                    if (name.IndexOfAny(disallowedCharsInName) >= 0)
                         throw ExcelHelper.Exception($"Invalid text name '{name}'", 0);
 
                     // 添加文本条目
@@ -61,7 +78,7 @@ namespace UnityExtensions.Localization.Editor
                     {
                         _textIndices.Add(name, index = _textNames.Count);
                         _textNames.Add(name);
-                        foreach (var texts in _languages.Values)
+                        foreach (var texts in _languageTexts.Values)
                         {
                             // 添加新文本条目时所有语言都先填充为 null
                             texts.Add(null);
@@ -85,8 +102,9 @@ namespace UnityExtensions.Localization.Editor
         }
 
 
-        static void ProcessTexts()
+        static void Process()
         {
+            // Process Texts
             var braceChars = new char[] { '{', '}' };
             var conversionChars = new char[] { '{', '}', '\\' };
 
@@ -95,19 +113,19 @@ namespace UnityExtensions.Localization.Editor
             string text;
             int index;
 
-            foreach (var lang in _languages)
+            foreach (var lang in _languageTexts)
             {
-                var textsList = lang.Value;
+                var textList = lang.Value;
 
                 // 第一遍：替换引用
-                for (int i = 0; i < textsList.Count; i++)
+                for (int i = 0; i < textList.Count; i++)
                 {
-                    if (string.IsNullOrEmpty(text = textsList[i]))
+                    if (string.IsNullOrEmpty(text = textList[i]))
                     {
                         // 顺便消除 null
                         if (text == null)
                         {
-                            textsList[i] = string.Empty;
+                            textList[i] = string.Empty;
                             Debug.LogWarning($"Unset item: '{_textNames[i]}' in language '{lang.Key}'");
                         }
                         continue;
@@ -136,7 +154,7 @@ namespace UnityExtensions.Localization.Editor
                                     if (_textIndices.TryGetValue(name, out int value))
                                     {
                                         builder.Remove(left, index - left + 1);
-                                        builder.Insert(left, textsList[value] ?? string.Empty);
+                                        builder.Insert(left, textList[value] ?? string.Empty);
                                         index = left - 1;
                                         left = -1;
                                     }
@@ -155,14 +173,14 @@ namespace UnityExtensions.Localization.Editor
 
                     if (left >= 0) throw new Exception($"Brace-conversion failed: '{text}' in language '{lang.Key}'");
 
-                    textsList[i] = builder.ToString();
+                    textList[i] = builder.ToString();
                     builder.Clear();
                 }
 
                 // 第二遍：处理转义
-                for (int i = 0; i < textsList.Count; i++)
+                for (int i = 0; i < textList.Count; i++)
                 {
-                    if (string.IsNullOrEmpty(text = textsList[i])) continue;
+                    if (string.IsNullOrEmpty(text = textList[i])) continue;
 
                     if ((index = text.IndexOfAny(conversionChars)) < 0) continue;
 
@@ -193,78 +211,55 @@ namespace UnityExtensions.Localization.Editor
                         }
                     }
 
-                    textsList[i] = builder.ToString();
+                    textList[i] = builder.ToString();
                     builder.Clear();
                 }
             }
-        }
 
-
-        static void SortMeta()
-        {
-            swapIndex = _textNames.Count
-            for (int i = 0; i < _textNames.Count; i++)
+            // 将语言列表按名称排序
+            if (!_textIndices.ContainsKey(languageName))
             {
-                if (_textNames[i].StartsWith("@"))
-                {
+                throw new Exception($"Can't find '{languageName.Substring(1)}' attribute. This attribute is indispensable.");
+            }
+            int nameIndex = _textIndices[languageName];
+            _languageTypes.Sort((a, b) => string.CompareOrdinal(_languageTexts[a][nameIndex], _languageTexts[b][nameIndex]));
+            _textIndices = null;    // 你已经没用了
 
+            // 将语言属性移到开头, 并移除 '#'
+            _attributeCount = 0;
+            for (int i = _textNames.Count - 1; i >= _attributeCount; i--)
+            {
+                var current = _textNames[i];
+                if (current[0] == '#')
+                {
+                    current = current.Substring(1);
+
+                    var target = _textNames[_attributeCount];
+                    _textNames[_attributeCount] = current;
+                    _textNames[i] = target;
+
+                    foreach (var textList in _languageTexts.Values)
+                    {
+                        target = textList[_attributeCount];
+                        textList[_attributeCount] = textList[i];
+                        textList[i] = target;
+                    }
+
+                    _attributeCount++;
+                    i++;
                 }
             }
         }
 
 
-        static void WriteMetaFile(string path)
-        {
-            using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (var writer = new BinaryWriter(stream))
-                {
-                    var languages = _languages.ToArray();
-                    languages.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
-
-                    
-
-                    // languages
-                    writer.Write(languages.Length);
-                    for (int i = 0; i < languages.Length; i++)
-                    {
-                        writer.Write(languages[i].Key);
-                    }
-
-                    // text names
-                    writer.Write(_textIndices.Count);
-                    foreach (var text in _textIndices)
-                    {
-                        writer.Write(text.Key);
-                        writer.Write(text.Value);
-                    }
-                }
-            }
-        }
-
-
-        static void WriteLanguageFile(string path, List<string> texts)
-        {
-            using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (var writer = new BinaryWriter(stream))
-                {
-                    for (int i = 0; i < texts.Count; i++)
-                    {
-                        writer.Write(texts[i]);
-                    }
-                }
-            }
-        }
-
-
-        static void ReadDataFromExcels(string sourceFolder)
+        public static bool ReadExcels()
         {
             try
             {
-                _languages = new Dictionary<string, List<string>>();
-                _textNames = new List<string>(1024);
+                _languageTexts = new Dictionary<string, List<string>>();
+                _languageTypes = new List<string>();
                 _textIndices = new Dictionary<string, int>(1024);
+                _textNames = new List<string>(1024);
 
                 var dir = new DirectoryInfo(sourceFolder);
                 foreach (var file in dir.EnumerateFiles("*.xlsx", SearchOption.AllDirectories))
@@ -272,85 +267,95 @@ namespace UnityExtensions.Localization.Editor
                     ReadExcel(file.FullName);
                 }
 
-                ProcessTexts();
-                SortMeta();
-            }
-            catch()
-            {
+                Process();
 
-            }
-        }
-
-
-        public static bool Build(string sourceFolder, string destinationFolder, out string log)
-        {
-            var logBuilder = new StringBuilder(1024);
-            bool result;
-            logBuilder.AppendLine("----------------- START -----------------");
-            logBuilder.AppendLine();
-
-
-
-            try
-            {
-
-
-                // 写配置文件
-                Directory.CreateDirectory(destinationFolder);
-                logBuilder.Append("Writing Configuration...");
-                WriteConfigurationFile($"{destinationFolder}/Configuration");
-                logBuilder.AppendLine("Finished");
-
-                // 写语言包
-                foreach (var lang in _languages)
-                {
-                    logBuilder.Append($"Writing Language {lang.Key}...");
-                    WriteLanguageFile($"{destinationFolder}/{lang.Key}", lang.Value.texts);
-                    logBuilder.AppendLine("Finished");
-                }
-
-                logBuilder.AppendLine();
-                logBuilder.AppendLine("---------------- SUCCESS ----------------");
-                result = true;
+                Debug.Log("[Localization] Finish reading excels.");
+                return true;
             }
             catch (Exception e)
             {
-                logBuilder.AppendLine("Unfinished");
+                _languageTexts = null;
+                _languageTypes = null;
+                _textIndices = null;
+                _textNames = null;
 
-                logBuilder.AppendLine();
-                logBuilder.AppendLine("Exception details:");
-                logBuilder.AppendLine(e.ToString());
-
-                logBuilder.AppendLine();
-                logBuilder.AppendLine("---------------- FAILURE ----------------");
-                result = false;
+                Debug.LogException(e);
+                return false;
             }
-
-            // 释放缓存区
-            fonts = null;
-            _languages = null;
-            styleNames = null;
-            _textIndices = null;
-
-            log = logBuilder.ToString();
-            return result;
         }
 
 
-        [UnityEditor.MenuItem("Assets/Unity Extensions/Build Language Packs")]
-        static void BuildLanguagePacks()
+        public static bool WritePacks(bool clearData)
         {
-            if (Build("Localization", "Assets/StreamingAssets/Localization", out var log))
+            try
             {
-                UnityEngine.Debug.Log(log);
+                Directory.CreateDirectory(targetFolder);
+                using (var stream = new FileStream($"{targetFolder}/{metaFileName}", FileMode.Create, FileAccess.Write))
+                {
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        // text names
+                        writer.Write(_attributeCount);
+                        writer.Write(_textNames.Count - _attributeCount);
+                        for (int i = 0; i < _textNames.Count; i++)
+                        {
+                            writer.Write(_textNames[i]);
+                        }
+
+                        // languages
+                        writer.Write(_languageTypes.Count);
+                        for (int i = 0; i < _languageTypes.Count; i++)
+                        {
+                            writer.Write(_languageTypes[i]);
+                            var textList = _languageTexts[_languageTypes[i]];
+                            for (int j = 0; j < _attributeCount; j++)
+                            {
+                                writer.Write(textList[j]);
+                            }
+                        }
+                    }
+                }
+
+                foreach (var lang in _languageTexts)
+                {
+                    using (var stream = new FileStream($"{targetFolder}/{lang.Key}", FileMode.Create, FileAccess.Write))
+                    {
+                        using (var writer = new BinaryWriter(stream))
+                        {
+                            // texts
+                            var textList = lang.Value;
+                            writer.Write(textList.Count - _attributeCount);
+                            for (int i = _attributeCount; i < textList.Count; i++)
+                            {
+                                writer.Write(textList[i]);
+                            }
+                        }
+                    }
+                }
+
+                Debug.Log("[Localization] Finish writing packs.");
+                return true;
             }
-            else
+            catch (Exception e)
             {
-                UnityEngine.Debug.LogError(log);
+                clearData = true;
+
+                Debug.LogException(e);
+                return false;
+            }
+            finally
+            {
+                if (clearData)
+                {
+                    _languageTexts = null;
+                    _languageTypes = null;
+                    _textIndices = null;
+                    _textNames = null;
+                }
             }
         }
 
-    } // class LanguagePacksBuilder
+    } // class LanguagePacker
 
 } // namespace UnityExtensions.Localization.Editor
 
