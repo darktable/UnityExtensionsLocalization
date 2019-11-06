@@ -2,10 +2,10 @@
 
 namespace UnityExtensions.Localization
 {
-    public interface ILocalizationContent
+    public interface ILocalizedContent
     {
         /// <summary>
-        /// default return -1 when get, always apply change when set
+        /// default return -1 when get, always apply change when set (could be -1)
         /// </summary>
         int languageIndex { get; set; }
     }
@@ -13,14 +13,14 @@ namespace UnityExtensions.Localization
 
     public partial struct LocalizationManager
     {
-        static QuickLinkedList<ILocalizationContent> _contents = new QuickLinkedList<ILocalizationContent>(64);
+        static QuickLinkedList<ILocalizedContent> _contents = new QuickLinkedList<ILocalizedContent>(64);
 
 
         public static event Action beforeContentsChange;
         public static event Action afterContentsChange;
 
 
-        public static int AddContent(ILocalizationContent content)
+        public static int AddContent(ILocalizedContent content)
         {
             if (content.languageIndex != languageIndex)
             {

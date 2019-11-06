@@ -9,7 +9,7 @@ using UnityEditor.Build.Reporting;
 
 namespace UnityExtensions.Localization.Editor
 {
-    public class LocalizationWindow : SerializableWindowSingleton<LocalizationWindow>
+    public class LocalizationEditor : SerializableWindowSingleton<LocalizationEditor>
     {
         [SerializeField] bool _autoBuildPacksBeforeUnityBuilding;
         [SerializeField] bool _autoLoadMetaInEditMode;
@@ -41,12 +41,18 @@ namespace UnityExtensions.Localization.Editor
         }
 
 
-        [MenuItem("Window/Unity Extensions/Localization")]
-        static void ShowWindow()
+        [MenuItem("Window/Localization")]
+        public static void ShowWindow()
         {
             instance.minSize = new Vector2(198, 282);
             instance.titleContent = new GUIContent("Localization");
             instance.Show();
+        }
+
+
+        public static string GetLanguageLabel(int index)
+        {
+            return _languages[index];
         }
 
 
@@ -55,25 +61,28 @@ namespace UnityExtensions.Localization.Editor
         {
             LocalizationManager.asyncTaskCompleted += TaskCompleted;
 
-            if (!EditorApplication.isPlayingOrWillChangePlaymode && instance._autoLoadMetaInEditMode)
+            EditorApplication.delayCall += () =>
             {
-                ReloadMeta();
-            }
-
-            EditorApplication.playModeStateChanged += mode =>
-            {
-                if (mode == PlayModeStateChange.EnteredEditMode)
+                if (!EditorApplication.isPlayingOrWillChangePlaymode && instance._autoLoadMetaInEditMode)
                 {
-                    if (instance._autoLoadMetaInEditMode)
-                    {
-                        ReloadMeta();
-                    }
-                    else
-                    {
-                        LocalizationManager.Quit();
-                        instance.RepaintIfVisible();
-                    }
+                    ReloadMeta();
                 }
+
+                EditorApplication.playModeStateChanged += mode =>
+                {
+                    if (mode == PlayModeStateChange.EnteredEditMode)
+                    {
+                        if (instance._autoLoadMetaInEditMode)
+                        {
+                            ReloadMeta();
+                        }
+                        else
+                        {
+                            LocalizationManager.Quit();
+                            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                        }
+                    }
+                };
             };
         }
 
@@ -122,7 +131,7 @@ namespace UnityExtensions.Localization.Editor
                 }
             }
 
-            instance.RepaintIfVisible();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
 
@@ -146,7 +155,29 @@ namespace UnityExtensions.Localization.Editor
                     instance._languageType = LocalizationManager.languageType;
             }
 
-            instance.RepaintIfVisible();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
+
+        public static void DrawLanguageSelection()
+        {
+            // select language
+            int languageIndex = (LocalizationManager.languageIndex < 0) ? (_languages.Length - 1) : LocalizationManager.languageIndex;
+
+            int index = EditorGUILayout.Popup(GUIContent.none, languageIndex, _languages);
+            if (index != languageIndex)
+            {
+                if (index == _languages.Length - 1)
+                {
+                    LocalizationManager.UnloadLanguage();
+                    TaskCompleted(TaskType.LoadLanguage, TaskResult.Success, _noneLanguage[0]);
+                }
+                else
+                {
+                    if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadLanguageAsync(index);
+                    else LocalizationManager.LoadExcelLanguageAsync(index);
+                }
+            }
         }
 
 
@@ -205,23 +236,7 @@ namespace UnityExtensions.Localization.Editor
 
                 EditorGUILayout.Space();
 
-                // select language
-                int languageIndex = (LocalizationManager.languageIndex < 0) ? (_languages.Length - 1) : LocalizationManager.languageIndex;
-
-                int index = EditorGUILayout.Popup(GUIContent.none, languageIndex, _languages);
-                if (index != languageIndex)
-                {
-                    if (index == _languages.Length - 1)
-                    {
-                        LocalizationManager.UnloadLanguage();
-                        TaskCompleted(TaskType.LoadLanguage, TaskResult.Success, _noneLanguage[0]);
-                    }
-                    else
-                    {
-                        if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadLanguageAsync(index);
-                        else LocalizationManager.LoadExcelLanguageAsync(index);
-                    }
-                }
+                DrawLanguageSelection();
 
                 using (DisabledScope.New(Application.isPlaying))
                 {

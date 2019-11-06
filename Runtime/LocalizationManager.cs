@@ -60,11 +60,16 @@ namespace UnityExtensions.Localization
 
             void IQueuedTask<LoadTask>.AfterComplete()
             {
-                if (succeeded) Commit();
+                int last = languageIndex;
+
+                if (!canceled && succeeded) Commit();
 
                 asyncTaskCompleted?.Invoke(type, canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure), detail);
 
-                if (succeeded) UpdateContents();
+                if ((last != -1 || languageIndex != -1) && !canceled && succeeded)
+                {
+                    UpdateContents();
+                }
             }
         }
 
@@ -156,7 +161,7 @@ namespace UnityExtensions.Localization
                             }
                         }
                     }
-                    _succeeded = !_canceled;
+                    _succeeded = true;
                 }
                 catch (Exception e)
                 {
@@ -181,7 +186,7 @@ namespace UnityExtensions.Localization
                             var task = tasks[id];
                             id = tasks.GetNext(id);
 
-                            if (task.type == TaskType.LoadMeta && task.succeeded)
+                            if (task.type == TaskType.LoadMeta && !task.canceled && task.succeeded)
                             {
                                 Cancel();
                                 return true;
@@ -268,7 +273,7 @@ namespace UnityExtensions.Localization
                             }
                         }
                     }
-                    _succeeded = !_canceled;
+                    _succeeded = true;
                 }
                 catch (Exception e)
                 {
@@ -293,7 +298,7 @@ namespace UnityExtensions.Localization
                             var task = tasks[id];
                             id = tasks.GetNext(id);
 
-                            if (task.detail == _languageType && task.succeeded)
+                            if (task.detail == _languageType && !task.canceled && task.succeeded)
                             {
                                 Cancel();
                                 return true;
@@ -370,7 +375,7 @@ namespace UnityExtensions.Localization
                             }
                         }
 
-                        _succeeded = !_canceled;
+                        _succeeded = true;
                     }
                 }
             }
@@ -399,7 +404,7 @@ namespace UnityExtensions.Localization
                             _texts[i] = textList[i + attributeCount];
                         }
 
-                        _succeeded = !_canceled;
+                        _succeeded = true;
                     }
                 }
             }
@@ -503,10 +508,13 @@ namespace UnityExtensions.Localization
 
         public static void UnloadLanguage()
         {
+            _taskQueue.ForEach(task => { if (task.type == TaskType.LoadLanguage) task.Cancel(); });
             if (_languageIndex >= 0)
             {
                 _languageIndex = -1;
                 _texts = null;
+
+                UpdateContents();
             }
         }
 
@@ -558,6 +566,14 @@ namespace UnityExtensions.Localization
         {
             return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
                 ? _languages[_languageIndices[languageType]].attributes[index] : null;
+        }
+
+
+        /// <summary>
+        /// 判断名字是否有效，必须要在加载 meta 之后调用
+        public static bool IsTextNameValid(string textName)
+        {
+            return textName != null && _textIndices.ContainsKey(textName);
         }
 
 

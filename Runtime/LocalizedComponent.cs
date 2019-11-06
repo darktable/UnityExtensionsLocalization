@@ -3,10 +3,10 @@
 namespace UnityExtensions.Localization
 {
     /// <summary>
-    /// LocalizationComponent
+    /// LocalizedComponent
     /// </summary>
     [ExecuteAlways]
-    public abstract class LocalizationComponent : ScriptableComponent, ILocalizationContent
+    public abstract class LocalizedComponent : ScriptableComponent, ILocalizedContent
     {
         int _languageIndex = -1;
         int _contentId = -1;
@@ -18,7 +18,7 @@ namespace UnityExtensions.Localization
             set
             {
                 _languageIndex = value;
-                UpdateContent(value);
+                if (value >= 0) UpdateContent();
             }
         }
 
@@ -39,8 +39,17 @@ namespace UnityExtensions.Localization
         }
 
 
-        protected abstract void UpdateContent(int languageIndex);
+        protected abstract void UpdateContent();
 
-    } // class LocalizationComponent
+
+#if UNITY_EDITOR
+        [ContextMenu("Open Localization Window")]
+        void OpenLocalizationWindow()
+        {
+            Editor.LocalizationEditor.ShowWindow();
+        }
+#endif
+
+    } // class LocalizedComponent
 
 } // UnityExtensions.Localization
