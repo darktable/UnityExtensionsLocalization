@@ -48,6 +48,12 @@ namespace UnityExtensions.Localization
         {
             Editor.LocalizationEditor.ShowWindow();
         }
+
+        [ContextMenu("Open Localization Folder")]
+        void OpenLocalizatioFolder()
+        {
+            Editor.LocalizationEditor.ShowFolder();
+        }
 #endif
 
     } // class LocalizedComponent

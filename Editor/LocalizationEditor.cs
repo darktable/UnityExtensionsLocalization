@@ -44,9 +44,16 @@ namespace UnityExtensions.Localization.Editor
         [MenuItem("Window/Localization")]
         public static void ShowWindow()
         {
-            instance.minSize = new Vector2(198, 282);
+            instance.minSize = new Vector2(200, 340);
             instance.titleContent = new GUIContent("Localization");
             instance.Show();
+        }
+
+
+        public static void ShowFolder()
+        {
+            System.IO.Directory.CreateDirectory(LanguagePacker.sourceFolder);
+            EditorUtility.RevealInFinder(LanguagePacker.sourceFolder);
         }
 
 
@@ -54,6 +61,9 @@ namespace UnityExtensions.Localization.Editor
         {
             return _languages[index];
         }
+
+
+        public static bool loadExcelsInsteadOfPacks => instance._loadExcelsInsteadOfPacks;
 
 
         [InitializeOnLoadMethod]
@@ -135,8 +145,9 @@ namespace UnityExtensions.Localization.Editor
         }
 
 
-        static void TaskCompleted(TaskType type, TaskResult result, string detail)
+        static void TaskCompleted((TaskType, TaskResult, string) data)
         {
+            var (type, result, detail) = data;
             if (instance._outputLogs)
             {
                 var message = $"[Localization] Task: {type}, Result: {result}, Detail: {detail}.";
@@ -170,7 +181,7 @@ namespace UnityExtensions.Localization.Editor
                 if (index == _languages.Length - 1)
                 {
                     LocalizationManager.UnloadLanguage();
-                    TaskCompleted(TaskType.LoadLanguage, TaskResult.Success, _noneLanguage[0]);
+                    TaskCompleted((TaskType.LoadLanguage, TaskResult.Success, _noneLanguage[0]));
                 }
                 else
                 {
@@ -181,17 +192,25 @@ namespace UnityExtensions.Localization.Editor
         }
 
 
+        static void CopyAllUsedCharacters()
+        {
+            var editor = new TextEditor();
+            editor.text = LocalizationManager.GetAllUsedCharacters();
+            editor.SelectAll();
+            editor.Copy();
+        }
+
+
         void OnGUI()
         {
-            using (DisabledScope.New(LocalizationManager.isLoading || _buildTask != null))
+            using (DisabledScope.New(LocalizationManager.hasTask || _buildTask != null))
             {
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("Tools", EditorStyles.boldLabel);
                 EditorGUILayout.Space();
 
                 // build packs button
-                var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-                if (GUI.Button(rect, "Build Packs"))
+                if (GUILayout.Button("Build Packs"))
                 {
                     _buildTask = TaskMonitor.Add(BuildPacks, BuildCompleted);
                 }
@@ -204,14 +223,32 @@ namespace UnityExtensions.Localization.Editor
                 }
 
                 EditorGUILayout.Space();
+
+                using (DisabledScope.New(LocalizationManager.languageIndex < 0))
+                {
+                    // copy all chars to clipboard
+                    if (GUILayout.Button("Copy All Used Characters"))
+                    {
+                        CopyAllUsedCharacters();
+                    }
+                }
+
+                EditorGUILayout.Space();
+
+                // show folder
+                if (GUILayout.Button("Open Localization Folder"))
+                {
+                    ShowFolder();
+                }
+
+                EditorGUILayout.Space();
                 EditorGUILayout.Space();
 
                 EditorGUILayout.LabelField("Debug", EditorStyles.boldLabel);
                 EditorGUILayout.Space();
 
                 // load meta button
-                rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-                if (GUI.Button(rect, LocalizationManager.isMetaLoaded ? "Reload Meta" : "Load Meta"))
+                if (GUILayout.Button(LocalizationManager.isMetaLoaded ? "Reload Meta" : "Load Meta"))
                 {
                     ReloadMeta();
                 }
@@ -223,7 +260,7 @@ namespace UnityExtensions.Localization.Editor
                     if (newAutoLoadMetaInEditMode != _autoLoadMetaInEditMode)
                     {
                         _autoLoadMetaInEditMode = newAutoLoadMetaInEditMode;
-                        if (_autoLoadMetaInEditMode && !LocalizationManager.isMetaLoaded && !LocalizationManager.isLoading)
+                        if (_autoLoadMetaInEditMode && !LocalizationManager.isMetaLoaded && !LocalizationManager.hasTask)
                         {
                             ReloadMeta();
                         }

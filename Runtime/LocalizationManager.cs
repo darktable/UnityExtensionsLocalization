@@ -28,6 +28,7 @@ namespace UnityExtensions.Localization
     {
         const string targetFolder = "Localization";
         const string metaFileName = "meta";
+        const string languageName = "LanguageName";
         const float waitToDisposeThread = 8;
 
         // meta 文件中的数据
@@ -64,7 +65,7 @@ namespace UnityExtensions.Localization
 
                 if (!canceled && succeeded) Commit();
 
-                asyncTaskCompleted?.Invoke(type, canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure), detail);
+                asyncTaskCompleted?.Invoke((type, canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure), detail));
 
                 if ((last != -1 || languageIndex != -1) && !canceled && succeeded)
                 {
@@ -432,23 +433,50 @@ namespace UnityExtensions.Localization
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
+
+        public static string GetAllUsedCharacters()
+        {
+            HashSet<char> chars = new HashSet<char>();
+            foreach (var text in _texts)
+            {
+                foreach (var c in text)
+                {
+                    chars.Add(c);
+                }
+            }
+
+            foreach (var c in _languages[_languageIndex].attributes[_attributeIndices[languageName]])
+            {
+                chars.Add(c);
+            }
+
+            var builder = new System.Text.StringBuilder(chars.Count);
+            foreach (var c in chars)
+            {
+                builder.Append(c);
+            }
+
+            return builder.ToString();
+        }
+
 #endif
 
 
         /// <summary>
-        /// 异步加载任务完成时触发
+        /// Trigger on any async task completed.
+        /// Every xxxAsync call corresponds a asyncTaskCompleted callback.
         /// </summary>
-        public static event Action<TaskType, TaskResult, string> asyncTaskCompleted;
+        public static event Action<(TaskType type, TaskResult result, string detail)> asyncTaskCompleted;
 
 
         /// <summary>
-        /// 当前语言类型 (default Empty)，可用于存储用户的语言设置
+        /// Current language type (default Empty before any language is loaded)，you can save this in user data
         /// </summary>
         public static string languageType => _languageIndex < 0 ? string.Empty : _languages[_languageIndex].type;
 
 
         /// <summary>
-        /// 当前语言 Index (default -1)，可用于显示语言列表时高亮当前语言
+        /// Current language Index (default -1 before any language is loaded)，you can use this to choose the highlighted language in a UI list
         /// </summary>
         public static int languageIndex => _languageIndex < 0 ? -1 : _languageIndex;
 
@@ -456,50 +484,69 @@ namespace UnityExtensions.Localization
         public static bool isMetaLoaded => _languageIndex > -2;
 
 
-        public static bool isLanguageLoaded => _languageIndex >= 0;
-
-
-        public static bool isLoading => _taskQueue.hasTask;
+        public static bool hasTask => _taskQueue.hasTask;
 
 
         /// <summary>
-        /// 语言总数，可用于显示语言列表（default 0）
+        /// Default 0 before meta is loaded
         /// </summary>
         public static int languageCount => _languageIndex > -2 ? _languages.Length : 0;
 
 
         /// <summary>
-        /// 开始加载本地化的基本信息，应该尽可能早的调用
+        /// Start loading meta asynchronously. You can use asyncTaskCompleted to capture the completion event, or query isMetaLoaded.
         /// </summary>
         /// <param name="forceReload"></param>
         public static void LoadMetaAsync(bool forceReload = false)
         {
+#if UNITY_EDITOR
+            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            {
+                LoadExcelMetaAsync(forceReload: forceReload);
+                return;
+            }
+#endif
+
             var task = new LoadMetaTask(forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
         /// <summary>
-        /// 开始加载一种语言，必须在 LoadMetaAsync 调用后调用
-        /// 用于在开始游戏时通过玩家配置或系统配置设置语言
+        /// Start loading a language asynchronously. You can use asyncTaskCompleted to capture the completion event, or query languageType.
+        /// You must call LoadMetaAsync before calling this.
         /// </summary>
-        /// <param name="languageIndex"></param>
         /// <param name="forceReload"></param>
         public static void LoadLanguageAsync(string languageType, bool forceReload = false)
         {
+#if UNITY_EDITOR
+            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            {
+                LoadExcelLanguageAsync(languageType, forceReload);
+                return;
+            }
+#endif
+
             var task = new LoadLanguageTask(languageType, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
         /// <summary>
-        /// 开始加载一种语言，必须在 meta 加载完成后调用
-        /// 用于在游戏中通过语言列表切换语言
+        /// Start loading a language asynchronously. You can use asyncTaskCompleted to capture the completion event, or query languageIndex.
+        /// You must call this after meta is loaded.
         /// </summary>
-        /// <param name="languageIndex"></param>
         /// <param name="forceReload"></param>
         public static void LoadLanguageAsync(int languageIndex, bool forceReload = false)
         {
+#if UNITY_EDITOR
+            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            {
+                LoadExcelLanguageAsync(languageIndex, forceReload);
+                return;
+            }
+#endif
+
             var languageType = _languages[languageIndex].type;
             var task = new LoadLanguageTask(languageType, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
@@ -520,10 +567,8 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// 获取语言类型，必须在 meta 加载完成后调用
+        /// Convert languageIndex to languageType. You must call this after meta is loaded.
         /// </summary>
-        /// <param name="languageIndex"></param>
-        /// <returns></returns>
         public static string GetLanguageType(int languageIndex)
         {
             return _languages[languageIndex].type;
@@ -531,10 +576,8 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// 获取语言 Index，必须在 meta 加载完成后调用
+        /// Convert languageType to languageIndex. You must call this after meta is loaded.
         /// </summary>
-        /// <param name="languageType"></param>
-        /// <returns></returns>
         public static int GetLanguageIndex(string languageType)
         {
             return _languageIndices[languageType];
@@ -542,12 +585,11 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// 获取语言属性，必须在 meta 加载完成后调用
-        /// 返回 null 表示属性不存在
+        /// Get the specific attribute of a language. You must call this after meta is loaded.
         /// </summary>
         /// <param name="languageIndex"></param>
         /// <param name="attributeName"></param>
-        /// <returns></returns>
+        /// <returns>'null' means no such attribute.</returns>
         public static string GetLanguageAttribute(int languageIndex, string attributeName)
         {
             return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
@@ -556,12 +598,11 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// 获取语言属性，必须在 meta 加载完成后调用
-        /// 返回 null 表示属性不存在
+        /// Get the specific attribute of a language. You must call this after meta is loaded.
         /// </summary>
-        /// <param name="languageType"></param>
+        /// <param name="languageIndex"></param>
         /// <param name="attributeName"></param>
-        /// <returns></returns>
+        /// <returns>'null' means no such attribute.</returns>
         public static string GetLanguageAttribute(string languageType, string attributeName)
         {
             return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
@@ -569,8 +610,6 @@ namespace UnityExtensions.Localization
         }
 
 
-        /// <summary>
-        /// 判断名字是否有效，必须要在加载 meta 之后调用
         public static bool IsTextNameValid(string textName)
         {
             return textName != null && _textIndices.ContainsKey(textName);
@@ -578,11 +617,11 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// 获取一个唯一的名字对应的文本，必须要在加载一种语言之后调用
-        /// 返回 null 表示文本不存在
+        /// Get the specific text of current language. You must call this after a language is loaded.
         /// </summary>
-        /// <param name="textName"></param>
-        /// <returns></returns>
+        /// <param name="languageIndex"></param>
+        /// <param name="attributeName"></param>
+        /// <returns>'null' means no such text.</returns>
         public static string GetText(string textName)
         {
             return (textName != null && _textIndices.TryGetValue(textName, out int index)) ? _texts[index] : null;

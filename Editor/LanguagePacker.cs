@@ -11,11 +11,15 @@ namespace UnityExtensions.Localization.Editor
 {
     static class LanguagePacker
     {
-        const string sourceFolder = "Localization";
-        const string targetFolder = "Assets/StreamingAssets/Localization";
-        const string metaFileName = "meta";
-        const string languageName = "#LanguageName";
+        public const string sourceFolder = "Localization";
+        public const string targetFolder = "Assets/StreamingAssets/Localization";
+        public const string metaFileName = "meta";
+
+        const string @LanguageName = "@LanguageName";
+        const char commentChar = '#';
+        const char attributeChar = '@';
         static char[] disallowedCharsInName = { '{', '}', '\\', '\n', '\t' };
+
 
         static Dictionary<string, List<string>> _languageTexts;
         static List<string> _languageTypes;
@@ -47,20 +51,27 @@ namespace UnityExtensions.Localization.Editor
 
                 for (int i = 1; i < fieldCount; i++)
                 {
-                    var languageType = ExcelHelper.GetTrimmedString(i);
+                    var languageType = ExcelHelper.GetString(i)?.Trim();
 
-                    if (!_languageTexts.TryGetValue(languageType, out var texts))
+                    if (string.IsNullOrEmpty(languageType) || languageType[0] == commentChar)
                     {
-                        // 添加新语言时，未曾初始化的文本先填充为 null
-                        texts = new List<string>(Math.Max(_textNames.Count * 2, 256));
-                        for (int j = 0; j < _textNames.Count; j++)
-                        {
-                            texts.Add(null);
-                        }
-                        _languageTexts.Add(languageType, texts);
-                        _languageTypes.Add(languageType);
+                        languageTexts[i - 1] = null;    // 表示注释列
                     }
-                    languageTexts[i - 1] = texts;
+                    else
+                    {
+                        if (!_languageTexts.TryGetValue(languageType, out var texts))
+                        {
+                            // 添加新语言时，未曾初始化的文本先填充为 null
+                            texts = new List<string>(Math.Max(_textNames.Count * 2, 256));
+                            for (int j = 0; j < _textNames.Count; j++)
+                            {
+                                texts.Add(null);
+                            }
+                            _languageTexts.Add(languageType, texts);
+                            _languageTypes.Add(languageType);
+                        }
+                        languageTexts[i - 1] = texts;
+                    }
                 }
 
                 // 读取其他所有行
@@ -68,7 +79,7 @@ namespace UnityExtensions.Localization.Editor
                 {
                     // 读取文本名字
                     var name = ExcelHelper.GetString(0)?.Trim();
-                    if (string.IsNullOrEmpty(name)) continue;   // 跳过无名字的行（注释行）
+                    if (string.IsNullOrEmpty(name) || name[0] == commentChar) continue;   // 跳过注释行
 
                     if (name.IndexOfAny(disallowedCharsInName) >= 0)
                         throw ExcelHelper.Exception($"Invalid text name '{name}'", 0);
@@ -88,6 +99,8 @@ namespace UnityExtensions.Localization.Editor
                     // 读取文本内容
                     for (int i = 1; i < fieldCount; i++)
                     {
+                        if (languageTexts[i - 1] == null) continue; // 跳过注释列
+
                         if (languageTexts[i - 1][index] == null)
                         {
                             languageTexts[i - 1][index] = ExcelHelper.GetString(i);
@@ -217,20 +230,20 @@ namespace UnityExtensions.Localization.Editor
             }
 
             // 将语言列表按名称排序
-            if (!_textIndices.ContainsKey(languageName))
+            if (!_textIndices.ContainsKey(@LanguageName))
             {
-                throw new Exception($"Can't find '{languageName.Substring(1)}' attribute. This attribute is indispensable.");
+                throw new Exception($"Can't find '{@LanguageName.Substring(1)}' attribute. This attribute is indispensable.");
             }
-            int nameIndex = _textIndices[languageName];
+            int nameIndex = _textIndices[@LanguageName];
             _languageTypes.Sort((a, b) => string.CompareOrdinal(_languageTexts[a][nameIndex], _languageTexts[b][nameIndex]));
             _textIndices = null;    // 你已经没用了
 
-            // 将语言属性移到开头, 并移除 '#'
+            // 将语言属性移到开头, 并移除属性标记
             _attributeCount = 0;
             for (int i = _textNames.Count - 1; i >= _attributeCount; i--)
             {
                 var current = _textNames[i];
-                if (current[0] == '#')
+                if (current[0] == attributeChar)
                 {
                     current = current.Substring(1);
 
