@@ -15,7 +15,7 @@
   ],
   "type": "library",
   "dependencies": {
-    "com.yuyang.unity-extensions.common": "",
-    "com.yuyang.unity-extensions.excel-data-reader": ""
+    "com.yuyang.unity-extensions.common": "https://github.com/yuyang9119/UnityExtensionsCommon.git",
+    "com.yuyang.unity-extensions.excel-data-reader": "https://github.com/yuyang9119/UnityExtensionsExcelDataReader.git"
   }
 }
