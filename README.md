@@ -29,7 +29,7 @@ This is a localization system based on excel sheets.
 </p>
 
 ## Quick Start
-0. Install this package by Package Manager (Unity menu: Window > Package Manager), input the git url: https://github.com/yuyang9119/UnityExtensionsLocalization.git
+0. Install this package by Package Manager (Unity menu: Window > Package Manager), input the git url: https://github.com/yuyang9119/UnityExtensionsLocalization.git.
 1. Create a "Localization" folder in your project root directory, in the same directory as "Assets".
 2. Create and edit excel files, save them in the Localization folder. [Sample.xlsx](Documentation~/Sample.xlsx)
 3. Open the Localizaton window (unity menu: Window/Localization), click "Build Packs".
