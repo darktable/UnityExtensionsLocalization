@@ -292,6 +292,7 @@ namespace UnityExtensions.Localization.Editor
                 _textIndices = null;
                 _textNames = null;
 
+                Debug.LogError("[Localization] Failed to read excels.");
                 Debug.LogException(e);
                 return false;
             }
@@ -353,6 +354,7 @@ namespace UnityExtensions.Localization.Editor
             {
                 clearData = true;
 
+                Debug.LogError("[Localization] Failed to write packs.");
                 Debug.LogException(e);
                 return false;
             }

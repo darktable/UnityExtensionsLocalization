@@ -6,6 +6,7 @@ using UnityExtensions.Editor;
 using System.Threading.Tasks;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using System.IO;
 
 namespace UnityExtensions.Localization.Editor
 {
@@ -20,6 +21,8 @@ namespace UnityExtensions.Localization.Editor
 
         [SerializeField] string _languageType;
 
+
+        const string saveFile = ".localization";
 
         static string[] _noneLanguage = { "(None Language)" };
         static string[] _languages = _noneLanguage;
@@ -52,7 +55,7 @@ namespace UnityExtensions.Localization.Editor
 
         public static void ShowFolder()
         {
-            System.IO.Directory.CreateDirectory(LanguagePacker.sourceFolder);
+            Directory.CreateDirectory(LanguagePacker.sourceFolder);
             EditorUtility.RevealInFinder(LanguagePacker.sourceFolder);
         }
 
@@ -289,6 +292,42 @@ namespace UnityExtensions.Localization.Editor
 
                 // _outputLogs
                 _outputLogs = EditorGUILayout.ToggleLeft("Output Logs", _outputLogs);
+            }
+        }
+
+
+        protected override void Save(string data)
+        {
+            try
+            {
+                Directory.CreateDirectory(LanguagePacker.sourceFolder);
+                using (var stream = new FileStream($"{LanguagePacker.sourceFolder}/{saveFile}", FileMode.Create, FileAccess.Write))
+                {
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(data);
+                    }
+                }
+            }
+            catch { }
+        }
+
+
+        protected override string Load()
+        {
+            try
+            {
+                using (var stream = File.Open($"{LanguagePacker.sourceFolder}/{saveFile}", FileMode.Open, FileAccess.Read))
+                {
+                    using (var reader = new BinaryReader(stream))
+                    {
+                        return reader.ReadString();
+                    }
+                }
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
     }
