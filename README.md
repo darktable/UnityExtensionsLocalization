@@ -32,9 +32,9 @@ This is a Unity localization system that uses excel files during development.
 Open package manager window in Unity (menu: Window > Package Manager), select "Add package from git URL...", fill in this in the pop-up text box: https://github.com/yuyang9119/UnityExtensionsLocalization.git#v1.0.0.
 
 ## Quick Start
-1. Create a "Localization" folder in your project root directory, in the same directory as "Assets".
+1. Create a "Localization" folder in your project root directory, it is the same directory as the "Assets".
 2. Create and edit excel files, save them in the Localization folder. [Sample.xlsx](Documentation~/Sample.xlsx)
-3. Open the Localizaton window (unity menu: Window/Localization), click "Build Packs".
+3. Open the Localizaton window in unity (menu: Window > Localization), click "Build Packs".
 4. Call LocalizationManager.LoadMetaAsync when your game starts running.
 5. Call LocalizationManager.LoadLanguageAsync to load a language.
 6. After loading a language, you can call LocalizationManager.GetText to get a localized text.
