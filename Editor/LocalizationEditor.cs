@@ -56,7 +56,7 @@ namespace UnityExtensions.Localization.Editor
         public static void ShowFolder()
         {
             Directory.CreateDirectory(LanguagePacker.sourceFolder);
-            EditorUtility.RevealInFinder(LanguagePacker.sourceFolder);
+            Application.OpenURL(LanguagePacker.sourceFolder);
         }
 
 
