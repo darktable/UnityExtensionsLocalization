@@ -274,10 +274,9 @@ namespace UnityExtensions.Localization.Editor
                 _textIndices = new Dictionary<string, int>(1024);
                 _textNames = new List<string>(1024);
 
-                var dir = new DirectoryInfo(sourceFolder);
-                foreach (var file in dir.EnumerateFiles("*.xlsx", SearchOption.AllDirectories))
+                foreach (var file in Directory.EnumerateFiles(sourceFolder, "*.xlsx", SearchOption.AllDirectories))
                 {
-                    ReadExcel(file.FullName);
+                    ReadExcel(file);
                 }
 
                 Process();
