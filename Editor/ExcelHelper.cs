@@ -95,7 +95,7 @@ namespace UnityExtensions.Localization.Editor
 
         public static string Warning(string message, int column)
         {
-            return $"{message}: File: {_filePath}, Sheet: {_reader.Name}, Line: {_lineNumber}, Column: {column+1}";
+            return $"[{message}] File: {_filePath}, Sheet: {_reader.Name}, Line: {_lineNumber}, Column: {column+1}";
         }
 
     } // struct ExcelHelper

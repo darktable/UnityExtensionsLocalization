@@ -610,7 +610,7 @@ namespace UnityExtensions.Localization
         }
 
 
-        public static bool IsTextNameValid(string textName)
+        public static bool HasText(string textName)
         {
             return textName != null && _textIndices.ContainsKey(textName);
         }

@@ -18,6 +18,7 @@ namespace UnityExtensions.Localization.Editor
         const string @LanguageName = "@LanguageName";
         const char commentChar = '#';
         const char attributeChar = '@';
+        const string autoNumberingMark = "^";
         static char[] disallowedCharsInName = { '{', '}', '\\', '\n', '\t' };
 
 
@@ -36,6 +37,34 @@ namespace UnityExtensions.Localization.Editor
                 int attributeCount
             )
         data => (_languageTexts, _languageTypes, _textNames, _attributeCount);
+
+
+        static bool TryGetAutoNumbering(string textName, out string prefix, out int suffix)
+        {
+            int charIndex = textName.Length - 1;
+            for (; charIndex >= 0; charIndex--)
+            {
+                if (!char.IsDigit(textName[charIndex]))
+                {
+                    break;
+                }
+            }
+
+            charIndex++;
+
+            if (charIndex < textName.Length)
+            {
+                if (int.TryParse(textName.Substring(charIndex), out suffix))
+                {
+                    prefix = textName.Substring(0, charIndex);
+                    return true;
+                }
+            }
+
+            prefix = null;
+            suffix = -1;
+            return false;
+        }
 
 
         static void ReadExcel(string path)
@@ -75,6 +104,11 @@ namespace UnityExtensions.Localization.Editor
                 }
 
                 // 读取其他所有行
+
+                int autoNumberingIndex = -1;
+                string autoNumberingPrefix = null;
+                string prevName = null;
+
                 while (ExcelHelper.ReadLine())
                 {
                     // 读取文本名字
@@ -83,6 +117,26 @@ namespace UnityExtensions.Localization.Editor
 
                     if (name.IndexOfAny(disallowedCharsInName) >= 0)
                         throw ExcelHelper.Exception($"Invalid text name '{name}'", 0);
+
+                    // 处理自动编号
+                    if (name == autoNumberingMark)
+                    {
+                        if (autoNumberingIndex == -1)
+                        {
+                            if (prevName == null)
+                                throw ExcelHelper.Exception($"Automatic numbering can not be first line.", 0);
+
+                            if (!TryGetAutoNumbering(prevName, out autoNumberingPrefix, out autoNumberingIndex))
+                                throw ExcelHelper.Exception($"The previous TextName has no valid suffix index.", 0);
+                        }
+
+                        name = $"{autoNumberingPrefix}{++autoNumberingIndex}";
+                    }
+                    else
+                    {
+                        autoNumberingIndex = -1;
+                        prevName = name;
+                    }
 
                     // 添加文本条目
                     if (!_textIndices.TryGetValue(name, out int index))
