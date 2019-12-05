@@ -22,7 +22,13 @@ This is a Unity localization system that uses excel files during development.
    <em>Escape Character</em>
 </p>
 
-- And, you can preview localized contents in edit-mode.
+- If the TextName is "^", it means that it inherits the prefix of the previous line TextName and automatically increments the number of the suffix. This is the automatic numbering function. This requires that the first of a series of automatic numbering must explicitly specify the prefix and initial suffix number. The advantage of using this function is that you don't have to manually modify the TextName when inserting, deleting, or adjusting the order to ensure that the numbers are continuous. The program can also access these rows through a loop.
+<p align="center">
+  <img src="Documentation~/AutomaticNumbering.png"><br>
+   <em>Automatic Numbering</em>
+</p>
+
+- You can preview localized contents in edit-mode.
 <p align="center">
   <img src="Documentation~/LocalizationWindow.png"><br>
    <em>Localization Window</em>
