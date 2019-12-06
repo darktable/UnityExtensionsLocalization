@@ -43,7 +43,7 @@ Open the package manager window (menu: Window > Package Manager), select "Add pa
 
 ## Quick Start
 1. Create a "Localization" folder in your project root directory, it is the same directory as the "Assets".
-2. Create and edit excel files, save them in the Localization folder ([Download Sample.xlsx](Documentation~/Sample.xlsx)).
+2. Create and edit excel files, save them in the Localization folder ([Download Sample.xlsx](Editor/EditorResources/Sample.xlsx)).
 3. Open the Localizaton window in unity (menu: Window > Localization), click "Build Packs".
 4. Call LocalizationManager.LoadMetaAsync when your game starts running.
 5. Call LocalizationManager.LoadLanguageAsync to load a language.
