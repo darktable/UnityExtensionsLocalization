@@ -12,11 +12,11 @@ namespace UnityExtensions.Localization.Editor
 {
     public class LocalizationEditor : SerializableWindowSingleton<LocalizationEditor>
     {
-        [SerializeField] bool _autoBuildPacksBeforeUnityBuilding;
-        [SerializeField] bool _autoLoadMetaInEditMode;
+        [SerializeField] bool _autoBuildPacksBeforeUnityBuilding = true;
+        [SerializeField] bool _autoLoadMetaInEditMode = true;
         [SerializeField] bool _autoReloadMetaAfterBuildingPacks;
         [SerializeField] bool _autoReloadLanguageAfterLoadingMeta;
-        [SerializeField] bool _loadExcelsInsteadOfPacks;
+        [SerializeField] bool _loadExcelsInsteadOfPacks = true;
         [SerializeField] bool _outputLogs;
 
         [SerializeField] string _languageType;

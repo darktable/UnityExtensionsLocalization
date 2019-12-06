@@ -328,9 +328,22 @@ namespace UnityExtensions.Localization.Editor
                 _textIndices = new Dictionary<string, int>(1024);
                 _textNames = new List<string>(1024);
 
-                foreach (var file in Directory.EnumerateFiles(sourceFolder, "*.xlsx", SearchOption.AllDirectories))
+                int fileCount = 0;
+                if (Directory.Exists(sourceFolder))
                 {
-                    ReadExcel(file);
+                    foreach (var file in Directory.EnumerateFiles(sourceFolder, "*.xlsx", SearchOption.AllDirectories))
+                    {
+                        fileCount++;
+                        ReadExcel(file);
+                    }
+                }
+
+                if (fileCount == 0)
+                {
+                    Directory.CreateDirectory(sourceFolder);
+                    string filePath = $"{sourceFolder}/Sample.xlsx";
+                    File.Copy(Path.GetFullPath("Packages/com.yuyang.unity-extensions.localization/Editor/EditorResources/Sample.xlsx"), filePath, false);
+                    ReadExcel(filePath);
                 }
 
                 Process();
