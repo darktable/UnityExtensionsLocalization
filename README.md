@@ -34,6 +34,9 @@ This is a Unity localization system that uses excel files during development.
    <em>Localization Window</em>
 </p>
 
+## Note
+This package does not contain UI support directly, if you are looking for a complete localization solution please use this: https://assetstore.unity.com/packages/slug/158921 (It supports UnityUI & TextMeshPro).
+
 ## Installation
 Unity can not install dependent packages automatically at present, you have to install them manually:
 - https://github.com/yuyang9119/UnityExtensionsCommon
