@@ -15,7 +15,7 @@ namespace UnityExtensions.Localization.Editor
         [SerializeField] bool _autoBuildPacksBeforeUnityBuilding = true;
         [SerializeField] bool _autoLoadMetaInEditMode = true;
         [SerializeField] bool _autoReloadMetaAfterBuildingPacks;
-        [SerializeField] bool _autoReloadLanguageAfterLoadingMeta;
+        [SerializeField] bool _autoReloadLanguageAfterLoadingMeta = true;
         [SerializeField] bool _loadExcelsInsteadOfPacks = true;
         [SerializeField] bool _outputLogs;
 
@@ -113,13 +113,13 @@ namespace UnityExtensions.Localization.Editor
 
         static void ReloadMeta(bool buildCompleted = false)
         {
-            if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadMetaAsync(true);
-            else LocalizationManager.LoadExcelMetaAsync(buildCompleted, true);
+            if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadMetaAsync(null, true);
+            else LocalizationManager.LoadExcelMetaAsync(buildCompleted, null, true);
 
             if (!EditorApplication.isPlayingOrWillChangePlaymode && instance._autoReloadLanguageAfterLoadingMeta && !string.IsNullOrEmpty(instance._languageType))
             {
-                if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadLanguageAsync(instance._languageType, true);
-                else LocalizationManager.LoadExcelLanguageAsync(instance._languageType, true);
+                if (!instance._loadExcelsInsteadOfPacks) LocalizationManager.LoadLanguageAsync(instance._languageType, null, true);
+                else LocalizationManager.LoadExcelLanguageAsync(instance._languageType, null, true);
             }
         }
 

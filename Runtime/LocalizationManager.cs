@@ -2,7 +2,6 @@
 using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Threading.Tasks;
 
 namespace UnityExtensions.Localization
 {
@@ -59,18 +58,28 @@ namespace UnityExtensions.Localization
             public abstract void Process();
             public abstract bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current);
 
+            Action<TaskResult> _callback;
+
+            public LoadTask(Action<TaskResult> callback)
+            {
+                _callback = callback;
+            }
+
             void IQueuedTask<LoadTask>.AfterComplete()
             {
                 int last = languageIndex;
 
                 if (!canceled && succeeded) Commit();
 
-                asyncTaskCompleted?.Invoke((type, canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure), detail));
+                var result = canceled ? TaskResult.Cancel : (succeeded ? TaskResult.Success : TaskResult.Failure);
+                asyncTaskCompleted?.Invoke((type, result, detail));
 
                 if ((last != -1 || languageIndex != -1) && !canceled && succeeded)
                 {
                     UpdateContents();
                 }
+
+                _callback?.Invoke(result);
             }
         }
 
@@ -97,7 +106,7 @@ namespace UnityExtensions.Localization
 
             public override bool succeeded => _succeeded;
 
-            public LoadMetaTask(bool forceReload)
+            public LoadMetaTask(Action<TaskResult> callback, bool forceReload) : base(callback)
             {
                 _forceReload = forceReload;
             }
@@ -242,7 +251,7 @@ namespace UnityExtensions.Localization
                 _canceled = true;
             }
 
-            public LoadLanguageTask(string languageType, bool forceReload)
+            public LoadLanguageTask(string languageType, Action<TaskResult> callback, bool forceReload) : base(callback)
             {
                 _languageType = languageType;
                 _forceReload = forceReload;
@@ -336,7 +345,7 @@ namespace UnityExtensions.Localization
         {
             volatile bool _buildCompleted;
 
-            public LoadExcelMetaTask(bool buildCompleted, bool forceReload) : base(forceReload)
+            public LoadExcelMetaTask(bool buildCompleted, Action<TaskResult> callback, bool forceReload) : base(callback, forceReload)
             {
                 _buildCompleted = buildCompleted;
             }
@@ -385,7 +394,7 @@ namespace UnityExtensions.Localization
 
         class LoadExcelLanguageTask : LoadLanguageTask
         {
-            public LoadExcelLanguageTask(string languageType, bool forceReload) : base(languageType, forceReload)
+            public LoadExcelLanguageTask(string languageType, Action<TaskResult> callback, bool forceReload) : base(languageType, callback, forceReload)
             {
             }
 
@@ -412,29 +421,29 @@ namespace UnityExtensions.Localization
         }
 
 
-        public static void LoadExcelMetaAsync(bool buildCompleted = false, bool forceReload = false)
+        internal static void LoadExcelMetaAsync(bool buildCompleted = false, Action<TaskResult> callback = null, bool forceReload = false)
         {
-            var task = new LoadExcelMetaTask(buildCompleted, forceReload);
+            var task = new LoadExcelMetaTask(buildCompleted, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
-        public static void LoadExcelLanguageAsync(string languageType, bool forceReload = false)
+        internal static void LoadExcelLanguageAsync(string languageType, Action<TaskResult> callback = null, bool forceReload = false)
         {
-            var task = new LoadExcelLanguageTask(languageType, forceReload);
+            var task = new LoadExcelLanguageTask(languageType, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
-        public static void LoadExcelLanguageAsync(int languageIndex, bool forceReload = false)
+        internal static void LoadExcelLanguageAsync(int languageIndex, Action<TaskResult> callback = null, bool forceReload = false)
         {
             var languageType = _languages[languageIndex].type;
-            var task = new LoadExcelLanguageTask(languageType, forceReload);
+            var task = new LoadExcelLanguageTask(languageType, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
-        public static string GetAllUsedCharacters()
+        internal static string GetAllUsedCharacters()
         {
             HashSet<char> chars = new HashSet<char>();
             foreach (var text in _texts)
@@ -494,61 +503,61 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// Start loading meta asynchronously. You can use asyncTaskCompleted to capture the completion event, or query isMetaLoaded.
+        /// Start loading meta asynchronously. You can use callback to capture the completion event, or check isMetaLoaded.
         /// </summary>
         /// <param name="forceReload"></param>
-        public static void LoadMetaAsync(bool forceReload = false)
+        public static void LoadMetaAsync(Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
             if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
             {
-                LoadExcelMetaAsync(forceReload: forceReload);
+                LoadExcelMetaAsync(false, callback, forceReload);
                 return;
             }
 #endif
 
-            var task = new LoadMetaTask(forceReload);
+            var task = new LoadMetaTask(callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
         /// <summary>
-        /// Start loading a language asynchronously. You can use asyncTaskCompleted to capture the completion event, or query languageType.
+        /// Start loading a language asynchronously. You can use callback to capture the completion event, or check languageType.
         /// You must call LoadMetaAsync before calling this.
         /// </summary>
         /// <param name="forceReload"></param>
-        public static void LoadLanguageAsync(string languageType, bool forceReload = false)
+        public static void LoadLanguageAsync(string languageType, Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
             if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
             {
-                LoadExcelLanguageAsync(languageType, forceReload);
+                LoadExcelLanguageAsync(languageType, callback, forceReload);
                 return;
             }
 #endif
 
-            var task = new LoadLanguageTask(languageType, forceReload);
+            var task = new LoadLanguageTask(languageType, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
         /// <summary>
-        /// Start loading a language asynchronously. You can use asyncTaskCompleted to capture the completion event, or query languageIndex.
+        /// Start loading a language asynchronously. You can use callback to capture the completion event, or check languageIndex.
         /// You must call this after meta is loaded.
         /// </summary>
         /// <param name="forceReload"></param>
-        public static void LoadLanguageAsync(int languageIndex, bool forceReload = false)
+        public static void LoadLanguageAsync(int languageIndex, Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
             if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
             {
-                LoadExcelLanguageAsync(languageIndex, forceReload);
+                LoadExcelLanguageAsync(languageIndex, callback, forceReload);
                 return;
             }
 #endif
 
             var languageType = _languages[languageIndex].type;
-            var task = new LoadLanguageTask(languageType, forceReload);
+            var task = new LoadLanguageTask(languageType, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
