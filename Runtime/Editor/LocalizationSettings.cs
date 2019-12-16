@@ -126,7 +126,6 @@ namespace UnityExtensions.Localization.Editor
 
         public void DrawLanguageSelection()
         {
-            // select language
             int languageIndex = (LocalizationManager.languageIndex < 0) ? (_languages.Length - 1) : LocalizationManager.languageIndex;
 
             int index = EditorGUILayout.Popup(GUIContent.none, languageIndex, _languages);

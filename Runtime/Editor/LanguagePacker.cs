@@ -302,13 +302,17 @@ namespace UnityExtensions.Localization.Editor
 
                     var target = _textNames[_attributeCount];
                     _textNames[_attributeCount] = current;
-                    _textNames[i] = target;
 
-                    foreach (var textList in _languageTexts.Values)
+                    if (_attributeCount != i)
                     {
-                        target = textList[_attributeCount];
-                        textList[_attributeCount] = textList[i];
-                        textList[i] = target;
+                        _textNames[i] = target;
+
+                        foreach (var textList in _languageTexts.Values)
+                        {
+                            target = textList[_attributeCount];
+                            textList[_attributeCount] = textList[i];
+                            textList[i] = target;
+                        }
                     }
 
                     _attributeCount++;
@@ -341,7 +345,7 @@ namespace UnityExtensions.Localization.Editor
                 {
                     Directory.CreateDirectory(sourceFolder);
                     string filePath = $"{sourceFolder}/Sample.xlsx";
-                    File.Copy(Path.GetFullPath("Packages/com.yuyang.unity-extensions.localization/Editor/EditorResources/Sample.xlsx"), filePath, false);
+                    File.Copy(Path.GetFullPath("Packages/com.yuyang.unity-extensions.localization/Runtime/Editor/EditorResources/Sample.xlsx"), filePath, false);
                     ReadExcel(filePath);
                 }
 
