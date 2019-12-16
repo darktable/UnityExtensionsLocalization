@@ -343,18 +343,15 @@ namespace UnityExtensions.Localization
 
         class LoadExcelMetaTask : LoadMetaTask
         {
-            volatile bool _buildCompleted;
-
-            public LoadExcelMetaTask(bool buildCompleted, Action<TaskResult> callback, bool forceReload) : base(callback, forceReload)
+            public LoadExcelMetaTask(Action<TaskResult> callback, bool forceReload) : base(callback, forceReload)
             {
-                _buildCompleted = buildCompleted;
             }
 
             public override void Process()
             {
                 if (!_canceled)
                 {
-                    if (!_buildCompleted) Editor.LanguagePacker.ReadExcels();
+                    Editor.LanguagePacker.ReadExcels();
                     var (languageTexts, languageTypes, textNames, attributeCount) = Editor.LanguagePacker.data;
 
                     if (!_canceled && languageTexts != null)
@@ -421,21 +418,21 @@ namespace UnityExtensions.Localization
         }
 
 
-        internal static void LoadExcelMetaAsync(bool buildCompleted = false, Action<TaskResult> callback = null, bool forceReload = false)
+        static void LoadExcelMetaAsync(Action<TaskResult> callback = null, bool forceReload = false)
         {
-            var task = new LoadExcelMetaTask(buildCompleted, callback, forceReload);
+            var task = new LoadExcelMetaTask(callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
-        internal static void LoadExcelLanguageAsync(string languageType, Action<TaskResult> callback = null, bool forceReload = false)
+        static void LoadExcelLanguageAsync(string languageType, Action<TaskResult> callback = null, bool forceReload = false)
         {
             var task = new LoadExcelLanguageTask(languageType, callback, forceReload);
             _taskQueue.Enqueue(task, waitToDisposeThread);
         }
 
 
-        internal static void LoadExcelLanguageAsync(int languageIndex, Action<TaskResult> callback = null, bool forceReload = false)
+        static void LoadExcelLanguageAsync(int languageIndex, Action<TaskResult> callback = null, bool forceReload = false)
         {
             var languageType = _languages[languageIndex].type;
             var task = new LoadExcelLanguageTask(languageType, callback, forceReload);
@@ -443,7 +440,7 @@ namespace UnityExtensions.Localization
         }
 
 
-        internal static string GetAllUsedCharacters()
+        static string GetAllUsedCharacters()
         {
             HashSet<char> chars = new HashSet<char>();
             foreach (var text in _texts)
@@ -466,6 +463,15 @@ namespace UnityExtensions.Localization
             }
 
             return builder.ToString();
+        }
+
+
+        public static void CopyAllUsedCharacters()
+        {
+            var editor = new TextEditor();
+            editor.text = GetAllUsedCharacters();
+            editor.SelectAll();
+            editor.Copy();
         }
 
 #endif
@@ -509,9 +515,9 @@ namespace UnityExtensions.Localization
         public static void LoadMetaAsync(Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
-            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            if (Editor.LocalizationSettings.instance.loadExcelsInsteadOfPacks)
             {
-                LoadExcelMetaAsync(false, callback, forceReload);
+                LoadExcelMetaAsync(callback, forceReload);
                 return;
             }
 #endif
@@ -529,7 +535,7 @@ namespace UnityExtensions.Localization
         public static void LoadLanguageAsync(string languageType, Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
-            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            if (Editor.LocalizationSettings.instance.loadExcelsInsteadOfPacks)
             {
                 LoadExcelLanguageAsync(languageType, callback, forceReload);
                 return;
@@ -549,7 +555,7 @@ namespace UnityExtensions.Localization
         public static void LoadLanguageAsync(int languageIndex, Action<TaskResult> callback = null, bool forceReload = false)
         {
 #if UNITY_EDITOR
-            if (Editor.LocalizationEditor.loadExcelsInsteadOfPacks)
+            if (Editor.LocalizationSettings.instance.loadExcelsInsteadOfPacks)
             {
                 LoadExcelLanguageAsync(languageIndex, callback, forceReload);
                 return;

@@ -5,11 +5,10 @@ using System.IO;
 using System.Text;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 
 namespace UnityExtensions.Localization.Editor
 {
-    static class LanguagePacker
+    public static class LanguagePacker
     {
         public const string sourceFolder = "Localization";
         public const string targetFolder = "Assets/StreamingAssets/Localization";
@@ -348,7 +347,7 @@ namespace UnityExtensions.Localization.Editor
 
                 Process();
 
-                Debug.Log("[Localization] Finish reading excels.");
+                if (LocalizationSettings.instance.outputLogs) Debug.Log("[Localization] Finish reading excels.");
                 return true;
             }
             catch (Exception e)
@@ -358,14 +357,14 @@ namespace UnityExtensions.Localization.Editor
                 _textIndices = null;
                 _textNames = null;
 
-                Debug.LogError("[Localization] Failed to read excels.");
-                Debug.LogException(e);
+                if (LocalizationSettings.instance.outputLogs) Debug.LogError("[Localization] Failed to read excels.");
+                Debug.LogError(e);
                 return false;
             }
         }
 
 
-        public static bool WritePacks(bool clearData)
+        public static bool WritePacks()
         {
             try
             {
@@ -413,27 +412,29 @@ namespace UnityExtensions.Localization.Editor
                     }
                 }
 
-                Debug.Log("[Localization] Finish writing packs.");
+                if (LocalizationSettings.instance.outputLogs) Debug.Log("[Localization] Finish writing packs.");
                 return true;
             }
             catch (Exception e)
             {
-                clearData = true;
-
-                Debug.LogError("[Localization] Failed to write packs.");
-                Debug.LogException(e);
+                if (LocalizationSettings.instance.outputLogs) Debug.LogError("[Localization] Failed to write packs.");
+                Debug.LogError(e);
                 return false;
             }
             finally
             {
-                if (clearData)
-                {
-                    _languageTexts = null;
-                    _languageTypes = null;
-                    _textIndices = null;
-                    _textNames = null;
-                }
+                _languageTexts = null;
+                _languageTypes = null;
+                _textIndices = null;
+                _textNames = null;
             }
+        }
+
+
+        public static void ShowSourceFolder()
+        {
+            Directory.CreateDirectory(sourceFolder);
+            Application.OpenURL(sourceFolder);
         }
 
     } // class LanguagePacker

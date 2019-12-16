@@ -46,13 +46,13 @@ namespace UnityExtensions.Localization
         [ContextMenu("Open Localization Window")]
         void OpenLocalizationWindow()
         {
-            Editor.LocalizationEditor.ShowWindow();
+            Editor.LocalizationWindow.ShowWindow();
         }
 
         [ContextMenu("Open Localization Folder")]
         void OpenLocalizatioFolder()
         {
-            Editor.LocalizationEditor.ShowFolder();
+            Editor.LanguagePacker.ShowSourceFolder();
         }
 #endif
 
