@@ -15,7 +15,7 @@ namespace UnityExtensions.Localization.Editor
 
         public static void ReadFile(string path, Action<string> readSheet)
         {
-            using (var stream = File.Open(_filePath = path, FileMode.Open, FileAccess.Read))
+            using (var stream = File.Open(_filePath = path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 using (_reader = ExcelReaderFactory.CreateReader(stream))
                 {

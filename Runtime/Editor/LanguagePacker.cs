@@ -336,8 +336,11 @@ namespace UnityExtensions.Localization.Editor
                 {
                     foreach (var file in Directory.EnumerateFiles(sourceFolder, "*.xlsx", SearchOption.AllDirectories))
                     {
-                        fileCount++;
-                        ReadExcel(file);
+                        if ((File.GetAttributes(file) & FileAttributes.Hidden) != FileAttributes.Hidden)
+                        {
+                            fileCount++;
+                            ReadExcel(file);
+                        }
                     }
                 }
 
