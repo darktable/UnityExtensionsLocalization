@@ -54,6 +54,12 @@ namespace UnityExtensions.Localization
         {
             Editor.LanguagePacker.ShowSourceFolder();
         }
+
+        [ContextMenu("Reload Meta")]
+        void ReloadMeta()
+        {
+            Editor.LocalizationSettings.instance.ReloadMeta();
+        }
 #endif
 
     } // class LocalizedComponent
