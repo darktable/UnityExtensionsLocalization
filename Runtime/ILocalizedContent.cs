@@ -13,7 +13,7 @@ namespace UnityExtensions.Localization
 
     public partial struct LocalizationManager
     {
-        static QuickLinkedList<ILocalizedContent> _contents = new QuickLinkedList<ILocalizedContent>(64);
+        static LinkedList<ILocalizedContent> _contents = new LinkedList<ILocalizedContent>(64);
 
 
         public static event Action beforeContentsChange;

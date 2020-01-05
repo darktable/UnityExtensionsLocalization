@@ -56,7 +56,7 @@ namespace UnityExtensions.Localization
             public abstract void Cancel();
             public abstract void Commit();
             public abstract void Process();
-            public abstract bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current);
+            public abstract bool BeforeEnqueue(LinkedList<LoadTask> tasks, int current);
 
             Action<TaskResult> _callback;
 
@@ -179,7 +179,7 @@ namespace UnityExtensions.Localization
                 }
             }
 
-            public override bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current)
+            public override bool BeforeEnqueue(LinkedList<LoadTask> tasks, int current)
             {
                 if (!_forceReload)
                 {
@@ -291,7 +291,7 @@ namespace UnityExtensions.Localization
                 }
             }
 
-            public override bool BeforeEnqueue(QuickLinkedList<LoadTask> tasks, int current)
+            public override bool BeforeEnqueue(LinkedList<LoadTask> tasks, int current)
             {
                 if (!_forceReload)
                 {
