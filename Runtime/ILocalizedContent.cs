@@ -5,7 +5,7 @@ namespace UnityExtensions.Localization
     public interface ILocalizedContent
     {
         /// <summary>
-        /// default return -1 when get, always apply change when set (could be -1)
+        /// default return -1, always apply change when set (could be -1)
         /// </summary>
         int languageIndex { get; set; }
     }
@@ -20,6 +20,9 @@ namespace UnityExtensions.Localization
         public static event Action afterContentsChange;
 
 
+        /// <summary>
+        /// Add a localized content to the LocalizationManager, return an id of this content.
+        /// </summary>
         public static int AddContent(ILocalizedContent content)
         {
             if (content.languageIndex != languageIndex)
@@ -31,6 +34,9 @@ namespace UnityExtensions.Localization
         }
 
 
+        /// <summary>
+        /// Remove a localized content from the LocalizationManager, use the id returned by AddContent
+        /// </summary>
         public static void RemoveContent(int contentId)
         {
             _contents.Remove(contentId);

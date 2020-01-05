@@ -23,6 +23,9 @@ namespace UnityExtensions.Localization
         }
 
 
+        /// <summary>
+        /// Is this componet added to LocalizationManager?
+        /// </summary>
         public bool managed => _contentId >= 0;
 
 
@@ -39,6 +42,9 @@ namespace UnityExtensions.Localization
         }
 
 
+        /// <summary>
+        /// Modify the graphic here
+        /// </summary>
         protected abstract void UpdateContent();
 
 

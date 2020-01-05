@@ -30,19 +30,19 @@ namespace UnityExtensions.Localization
         const string languageName = "LanguageName";
         const float waitToDisposeThread = 8;
 
-        // meta 文件中的数据
+        // data in meta file
         static (string type, string[] attributes)[] _languages;
         static Dictionary<string, int> _languageIndices;
         static Dictionary<string, int> _attributeIndices;
         static Dictionary<string, int> _textIndices;
 
-        // 语言包中的数据
+        // data in language file
         static string[] _texts;
 
-        // -2: 未加载；-1：已加载meta；>= 0：已加载语言
+        // -2: nothing loaded；-1：meta loaded；>= 0：a language loaded
         static int _languageIndex = -2;
 
-        // 异步加载任务队列
+        // async task queue
         static AsyncTaskQueue<LoadTask> _taskQueue = new AsyncTaskQueue<LoadTask>();
 
 
