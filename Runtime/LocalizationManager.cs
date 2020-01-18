@@ -547,6 +547,13 @@ namespace UnityExtensions.Localization
             return (textName != null && _textIndices.TryGetValue(textName, out int index)) ? _texts[index] : null;
         }
 
+        /// <summary>
+        /// Wait all tasks to be completed.
+        /// </summary>
+        public static void Wait()
+        {
+            _taskQueue.Wait();
+        }
 
 #if UNITY_EDITOR
 
