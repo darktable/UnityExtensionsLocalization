@@ -46,7 +46,7 @@ namespace UnityExtensions.Localization.Editor
         [InitializeOnLoadMethod]
         static void Init()
         {
-            LocalizationManager.asyncTaskCompleted += instance.TaskCompleted;
+            LocalizationManager.taskCompleted += instance.TaskCompleted;
 
             if (!EditorApplication.isPlayingOrWillChangePlaymode && instance.autoLoadMetaInEditMode)
             {
