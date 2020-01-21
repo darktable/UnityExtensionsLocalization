@@ -496,11 +496,11 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// Convert languageType to languageIndex. You must call this after meta is loaded.
+        /// Convert languageType to languageIndex, -1 means language type is invalid. You must call this after meta is loaded.
         /// </summary>
         public static int GetLanguageIndex(string languageType)
         {
-            return _languageIndices[languageType];
+            return _languageIndices.TryGetValue(languageType, out int index) ? index : -1;
         }
 
 
@@ -530,6 +530,9 @@ namespace UnityExtensions.Localization
         }
 
 
+        /// <summary>
+        /// Is the textName valid?
+        /// </summary>
         public static bool HasText(string textName)
         {
             return textName != null && _textIndices.ContainsKey(textName);
