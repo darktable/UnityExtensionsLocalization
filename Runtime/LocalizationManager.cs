@@ -132,19 +132,16 @@ namespace UnityExtensions.Localization
                     var data = request.downloadHandler.data;
                     request.Dispose();
 
-                    AsyncTask.Run(() =>
+                    try
                     {
-                        try
-                        {
-                            Load(new MemoryStream(data, false));
-                            _succeeded = true;
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogException(e);
-                        }
-                        _completed = true;
-                    });
+                        Load(new MemoryStream(data, false));
+                        _succeeded = true;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+                    _completed = true;
                 };
 #else
                 AsyncTask.Run(() =>

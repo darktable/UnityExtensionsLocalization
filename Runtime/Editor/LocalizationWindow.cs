@@ -12,7 +12,7 @@ namespace UnityExtensions.Localization.Editor
         public static void ShowWindow()
         {
             var instance = GetWindow<LocalizationWindow>();
-            instance.minSize = new Vector2(200, 340);
+            instance.minSize = new Vector2(200, 320);
             instance.titleContent = new GUIContent("Localization");
             instance.Show();
         }
@@ -78,13 +78,6 @@ namespace UnityExtensions.Localization.Editor
                             settings.ReloadMeta();
                         }
                     }
-
-                    using (DisabledScope.New(settings.loadExcelsInsteadOfPacks))
-                    {
-                        // autoReloadMetaAfterBuildingPacks
-                        settings.autoReloadMetaAfterBuildingPacks = EditorGUILayout.ToggleLeft(
-                            "Auto-reload Meta After Building Packs", settings.autoReloadMetaAfterBuildingPacks);
-                    }
                 }
 
                 EditorGUILayout.Space();
@@ -101,7 +94,14 @@ namespace UnityExtensions.Localization.Editor
                 EditorGUILayout.Space();
 
                 // loadExcelsInsteadOfPacks
-                settings.loadExcelsInsteadOfPacks = EditorGUILayout.ToggleLeft("Load Excels Instead of Packs", settings.loadExcelsInsteadOfPacks);
+                using (var scope = ChangeCheckScope.New())
+                {
+                    settings.loadExcelsInsteadOfPacks = EditorGUILayout.ToggleLeft("Load Excels Instead of Packs", settings.loadExcelsInsteadOfPacks);
+                    if (scope.changed)
+                    {
+                        if (LocalizationManager.isMetaLoaded) settings.ReloadMeta();
+                    }
+                }
 
                 // outputLogs
                 settings.outputLogs = EditorGUILayout.ToggleLeft("Output Logs", settings.outputLogs);

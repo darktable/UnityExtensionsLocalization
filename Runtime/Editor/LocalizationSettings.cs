@@ -14,7 +14,6 @@ namespace UnityExtensions.Localization.Editor
     {
         public bool autoBuildPacksBeforeUnityBuilding = true;
         public bool autoLoadMetaInEditMode = true;
-        public bool autoReloadMetaAfterBuildingPacks;
         public bool autoReloadLanguageAfterLoadingMeta = true;
         public bool loadExcelsInsteadOfPacks = true;
         public bool outputLogs;
@@ -37,7 +36,7 @@ namespace UnityExtensions.Localization.Editor
                 {
                     if (instance.autoBuildPacksBeforeUnityBuilding)
                     {
-                        instance.BuildPacks();
+                        instance.BuildCompleted(instance.BuildPacks());
                     }
                 }
             }
@@ -57,15 +56,15 @@ namespace UnityExtensions.Localization.Editor
             {
                 if (mode == PlayModeStateChange.EnteredEditMode)
                 {
+                    LocalizationManager.Quit();
+                    instance._languages = _noneLanguage;
+
                     if (instance.autoLoadMetaInEditMode)
                     {
                         instance.ReloadMeta();
                     }
-                    else
-                    {
-                        LocalizationManager.Quit();
-                        UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
-                    }
+                    
+                    UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 }
             };
         }
@@ -142,21 +141,25 @@ namespace UnityExtensions.Localization.Editor
 
         public void BuildPacksAsync()
         {
-            _buildTask = TaskMonitor.Add(BuildPacks, BuildCompleted);
+            _buildTask = TaskMonitor.Add(BuildPacks, t =>
+            {
+                _buildTask = null;
+                BuildCompleted(t.Result);
+            });
         }
 
-        void BuildCompleted(Task<bool> task)
+        void BuildCompleted(bool successful)
         {
-            _buildTask = null;
-
             AssetDatabase.Refresh();
 
-            if (!EditorApplication.isPlayingOrWillChangePlaymode && task.Result)
+            bool metaLoaded = LocalizationManager.isMetaLoaded;
+
+            LocalizationManager.Quit();
+            _languages = _noneLanguage;
+
+            if (metaLoaded && !EditorApplication.isPlayingOrWillChangePlaymode && successful)
             {
-                if (!loadExcelsInsteadOfPacks && LocalizationManager.isMetaLoaded && autoReloadMetaAfterBuildingPacks)
-                {
-                    ReloadMeta();
-                }
+                ReloadMeta();
             }
 
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
