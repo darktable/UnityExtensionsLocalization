@@ -14,6 +14,8 @@ namespace UnityExtensions.Localization.Editor
         public const string targetFolder = "Assets/StreamingAssets/Localization";
         public const string metaFileName = "meta";
 
+        const string textNameColumnName = "TextName";
+        const string textAttributeColumnName = "TextAttribute";
         const string @LanguageName = "@LanguageName";
         const char commentChar = '#';
         const char attributeChar = '@';
@@ -24,18 +26,18 @@ namespace UnityExtensions.Localization.Editor
         static Dictionary<string, List<string>> _languageTexts;
         static List<string> _languageTypes;
         static Dictionary<string, int> _textIndices;
-        static List<string> _textNames;
-        static int _attributeCount;
+        static List<(string name, string attribute)> _textNamesAndAttributes;
+        static int _languageAttributeCount;
 
 
         internal static
             (
                 Dictionary<string, List<string>> languageTexts,
                 List<string> languageTypes,
-                List<string> textNames,
+                List<(string name, string attribute)> textNamesAndAttributes,
                 int attributeCount
             )
-        data => (_languageTexts, _languageTypes, _textNames, _attributeCount);
+        data => (_languageTexts, _languageTypes, _textNamesAndAttributes, _languageAttributeCount);
 
 
         static bool TryGetAutoNumbering(string textName, out string prefix, out int suffix)
@@ -75,34 +77,54 @@ namespace UnityExtensions.Localization.Editor
                 int fieldCount = ExcelHelper.fieldCount;
 
                 // 暂存当前表格含有的语言的文本列表，用于之后添加条目
-                List<string>[] languageTexts = new List<string>[fieldCount - 1];
+                (int column, List<string> textList)[] languages = new (int, List<string>)[fieldCount];
+                int languageCount = 0;
+                int textNameColumn = -1;
+                int textAttributeColumn = -1;
 
-                for (int i = 1; i < fieldCount; i++)
+                for (int i = 0; i < fieldCount; i++)
                 {
-                    var languageType = ExcelHelper.GetString(i)?.Trim();
+                    var columnName = ExcelHelper.GetString(i).Trim();
 
-                    if (string.IsNullOrEmpty(languageType) || languageType[0] == commentChar)
+                    switch (columnName)
                     {
-                        languageTexts[i - 1] = null;    // 表示注释列
-                    }
-                    else
-                    {
-                        if (!_languageTexts.TryGetValue(languageType, out var texts))
-                        {
-                            // 添加新语言时，未曾初始化的文本先填充为 null
-                            texts = new List<string>(Math.Max(_textNames.Count * 2, 256));
-                            for (int j = 0; j < _textNames.Count; j++)
+                        case textNameColumnName:
+                            if (textNameColumn >= 0) throw ExcelHelper.Exception($"Column '{textNameColumnName}' repeated.", i);
+                            textNameColumn = i;
+                            break;
+
+                        case textAttributeColumnName:
+                            if (textAttributeColumn >= 0) throw ExcelHelper.Exception($"Column '{textAttributeColumnName}' repeated.", i);
+                            textAttributeColumn = i;
+                            break;
+
+                        default:
+                            if (!string.IsNullOrEmpty(columnName) && columnName[0] != commentChar)  // 排除注释列
                             {
-                                texts.Add(null);
+                                if (!_languageTexts.TryGetValue(columnName, out var texts)) // 其他表格可能已经读过这种语言
+                                {
+                                    // 添加新语言时，未曾初始化的文本先填充为 null
+                                    texts = new List<string>(Math.Max(_textNamesAndAttributes.Count * 2, 256));
+                                    for (int j = 0; j < _textNamesAndAttributes.Count; j++)
+                                    {
+                                        texts.Add(null);
+                                    }
+                                    _languageTexts.Add(columnName, texts);
+                                    _languageTypes.Add(columnName);
+                                }
+                                languages[languageCount++] = (i, texts);
                             }
-                            _languageTexts.Add(languageType, texts);
-                            _languageTypes.Add(languageType);
-                        }
-                        languageTexts[i - 1] = texts;
+                            break;
                     }
                 }
 
-                // 读取其他所有行
+                if (textNameColumn == -1)
+                {
+                    Debug.Log($"Sheet '{path}/{sheet}' has no '{textNameColumnName}' column, skipped.");
+                    return;
+                }
+
+                // 读取其他行
 
                 int autoNumberingIndex = -1;
                 string autoNumberingPrefix = null;
@@ -111,7 +133,7 @@ namespace UnityExtensions.Localization.Editor
                 while (ExcelHelper.ReadLine())
                 {
                     // 读取文本名字
-                    var name = ExcelHelper.GetString(0)?.Trim();
+                    var name = ExcelHelper.GetString(textNameColumn).Trim();
                     if (string.IsNullOrEmpty(name) || name[0] == commentChar) continue;   // 跳过注释行
 
                     if (name.IndexOfAny(disallowedCharsInName) >= 0)
@@ -137,31 +159,39 @@ namespace UnityExtensions.Localization.Editor
                         prevName = name;
                     }
 
+                    // 读取文本属性
+                    string attribute = textAttributeColumn >= 0 ? ExcelHelper.GetString(textAttributeColumn).Trim() : string.Empty;
+
                     // 添加文本条目
                     if (!_textIndices.TryGetValue(name, out int index))
                     {
-                        _textIndices.Add(name, index = _textNames.Count);
-                        _textNames.Add(name);
+                        _textIndices.Add(name, index = _textNamesAndAttributes.Count);
+                        _textNamesAndAttributes.Add((name, attribute));
                         foreach (var texts in _languageTexts.Values)
                         {
                             // 添加新文本条目时所有语言都先填充为 null
                             texts.Add(null);
                         }
                     }
+                    else if (attribute.Length > 0)
+                    {
+                        if (_textNamesAndAttributes[index].attribute.Length > 0 && _textNamesAndAttributes[index].attribute != attribute)
+                            Debug.LogWarning(ExcelHelper.Warning("Conflicted item detected", textAttributeColumn));
+
+                        // 设置文本属性
+                        _textNamesAndAttributes[index] = (name, attribute);
+                    }
 
                     // 读取文本内容
-                    for (int i = 1; i < fieldCount; i++)
+                    for (int i = 0; i < languageCount; i++)
                     {
-                        if (languageTexts[i - 1] == null) continue; // 跳过注释列
+                        var (column, textList) = languages[i];
 
-                        if (languageTexts[i - 1][index] == null)
-                        {
-                            languageTexts[i - 1][index] = ExcelHelper.GetString(i);
-                        }
-                        else
-                        {
-                            Debug.LogWarning(ExcelHelper.Warning("Conflicted item detected", i));
-                        }
+                        if (!string.IsNullOrEmpty(textList[index]))
+                            Debug.LogWarning(ExcelHelper.Warning("Conflicted item detected", column));
+
+                        textList[index] = ExcelHelper.GetString(column);
+
                     }
                 }
             });
@@ -192,7 +222,7 @@ namespace UnityExtensions.Localization.Editor
                         if (text == null)
                         {
                             textList[i] = string.Empty;
-                            Debug.LogWarning($"Unset item: '{_textNames[i]}' in language '{lang.Key}'");
+                            Debug.LogWarning($"Unset item: '{_textNamesAndAttributes[i].name}' in language '{lang.Key}'");
                         }
                         continue;
                     }
@@ -292,30 +322,30 @@ namespace UnityExtensions.Localization.Editor
             _textIndices = null;    // 你已经没用了
 
             // 将语言属性移到开头, 并移除属性标记
-            _attributeCount = 0;
-            for (int i = _textNames.Count - 1; i >= _attributeCount; i--)
+            _languageAttributeCount = 0;
+            for (int i = _textNamesAndAttributes.Count - 1; i >= _languageAttributeCount; i--)
             {
-                var current = _textNames[i];
-                if (current[0] == attributeChar)
+                var current = _textNamesAndAttributes[i];
+                if (current.name[0] == attributeChar)
                 {
-                    current = current.Substring(1);
+                    current.name = current.name.Substring(1);
 
-                    var target = _textNames[_attributeCount];
-                    _textNames[_attributeCount] = current;
+                    var target = _textNamesAndAttributes[_languageAttributeCount];
+                    _textNamesAndAttributes[_languageAttributeCount] = current;
 
-                    if (_attributeCount != i)
+                    if (_languageAttributeCount != i)
                     {
-                        _textNames[i] = target;
+                        _textNamesAndAttributes[i] = target;
 
                         foreach (var textList in _languageTexts.Values)
                         {
-                            target = textList[_attributeCount];
-                            textList[_attributeCount] = textList[i];
-                            textList[i] = target;
+                            var targetText = textList[_languageAttributeCount];
+                            textList[_languageAttributeCount] = textList[i];
+                            textList[i] = targetText;
                         }
                     }
 
-                    _attributeCount++;
+                    _languageAttributeCount++;
                     i++;
                 }
             }
@@ -329,7 +359,7 @@ namespace UnityExtensions.Localization.Editor
                 _languageTexts = new Dictionary<string, List<string>>();
                 _languageTypes = new List<string>();
                 _textIndices = new Dictionary<string, int>(1024);
-                _textNames = new List<string>(1024);
+                _textNamesAndAttributes = new List<(string, string)>(1024);
 
                 int fileCount = 0;
                 if (Directory.Exists(sourceFolder))
@@ -362,7 +392,7 @@ namespace UnityExtensions.Localization.Editor
                 _languageTexts = null;
                 _languageTypes = null;
                 _textIndices = null;
-                _textNames = null;
+                _textNamesAndAttributes = null;
 
                 if (LocalizationSettings.instance.outputLogs) Debug.LogError("[Localization] Failed to read excels.");
                 Debug.LogError(e);
@@ -380,12 +410,19 @@ namespace UnityExtensions.Localization.Editor
                 {
                     using (var writer = new BinaryWriter(stream))
                     {
-                        // text names
-                        writer.Write(_attributeCount);
-                        writer.Write(_textNames.Count - _attributeCount);
-                        for (int i = 0; i < _textNames.Count; i++)
+                        // language attributes
+                        writer.Write(_languageAttributeCount);
+                        for (int i = 0; i < _languageAttributeCount; i++)
                         {
-                            writer.Write(_textNames[i]);
+                            writer.Write(_textNamesAndAttributes[i].name);
+                        }
+
+                        // text names and attributes
+                        writer.Write(_textNamesAndAttributes.Count - _languageAttributeCount);
+                        for (int i = _languageAttributeCount; i < _textNamesAndAttributes.Count; i++)
+                        {
+                            writer.Write(_textNamesAndAttributes[i].name);
+                            writer.Write(_textNamesAndAttributes[i].attribute);
                         }
 
                         // languages
@@ -394,7 +431,7 @@ namespace UnityExtensions.Localization.Editor
                         {
                             writer.Write(_languageTypes[i]);
                             var textList = _languageTexts[_languageTypes[i]];
-                            for (int j = 0; j < _attributeCount; j++)
+                            for (int j = 0; j < _languageAttributeCount; j++)
                             {
                                 writer.Write(textList[j]);
                             }
@@ -410,8 +447,8 @@ namespace UnityExtensions.Localization.Editor
                         {
                             // texts
                             var textList = lang.Value;
-                            writer.Write(textList.Count - _attributeCount);
-                            for (int i = _attributeCount; i < textList.Count; i++)
+                            writer.Write(textList.Count - _languageAttributeCount);
+                            for (int i = _languageAttributeCount; i < textList.Count; i++)
                             {
                                 writer.Write(textList[i]);
                             }
@@ -433,7 +470,7 @@ namespace UnityExtensions.Localization.Editor
                 _languageTexts = null;
                 _languageTypes = null;
                 _textIndices = null;
-                _textNames = null;
+                _textNamesAndAttributes = null;
             }
         }
 

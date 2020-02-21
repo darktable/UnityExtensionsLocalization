@@ -39,8 +39,9 @@ namespace UnityExtensions.Localization
         // data in meta file
         static (string type, string[] attributes)[] _languages;
         static Dictionary<string, int> _languageIndices;
-        static Dictionary<string, int> _attributeIndices;
+        static Dictionary<string, int> _languageAttributeIndices;
         static Dictionary<string, int> _textIndices;
+        static string[] _textAttributes;
 
         // data in language file
         static string[] _texts;
@@ -173,8 +174,9 @@ namespace UnityExtensions.Localization
         {
             (string type, string[] attributes)[] _languages;
             Dictionary<string, int> _languageIndices;
-            Dictionary<string, int> _attributeIndices;
+            Dictionary<string, int> _languageAttributeIndices;
             Dictionary<string, int> _textIndices;
+            string[] _textAttributes;
 
             volatile bool _canceled;
             bool _forceReload;
@@ -230,20 +232,21 @@ namespace UnityExtensions.Localization
                     using (var reader = new BinaryReader(stream))
                     {
                         int attributeCount = reader.ReadInt32();
-                        int textCount = reader.ReadInt32();
-
-                        _attributeIndices = new Dictionary<string, int>(attributeCount);
+                        _languageAttributeIndices = new Dictionary<string, int>(attributeCount);
                         for (int i = 0; i < attributeCount; i++)
                         {
                             if (_canceled) return;
-                            _attributeIndices.Add(reader.ReadString(), i);
+                            _languageAttributeIndices.Add(reader.ReadString(), i);
                         }
 
+                        int textCount = reader.ReadInt32();
                         _textIndices = new Dictionary<string, int>(textCount);
+                        _textAttributes = new string[textCount];
                         for (int i = 0; i < textCount; i++)
                         {
                             if (_canceled) return;
                             _textIndices.Add(reader.ReadString(), i);
+                            _textAttributes[i] = reader.ReadString();
                         }
 
                         _languages = new (string, string[])[reader.ReadInt32()];
@@ -268,20 +271,22 @@ namespace UnityExtensions.Localization
             public override void LoadExcel()
             {
                 Editor.LanguagePacker.ReadExcels();
-                var (languageTexts, languageTypes, textNames, attributeCount) = Editor.LanguagePacker.data;
+                var (languageTexts, languageTypes, textNamesAndAttributes, languageAttributeCount) = Editor.LanguagePacker.data;
 
                 if (!_canceled && languageTexts != null)
                 {
-                    _attributeIndices = new Dictionary<string, int>(attributeCount);
-                    for (int i = 0; i < attributeCount; i++)
+                    _languageAttributeIndices = new Dictionary<string, int>(languageAttributeCount);
+                    for (int i = 0; i < languageAttributeCount; i++)
                     {
-                        _attributeIndices.Add(textNames[i], i);
+                        _languageAttributeIndices.Add(textNamesAndAttributes[i].name, i);
                     }
 
-                    _textIndices = new Dictionary<string, int>(textNames.Count - attributeCount);
-                    for (int i = attributeCount; i < textNames.Count; i++)
+                    _textAttributes = new string[textNamesAndAttributes.Count - languageAttributeCount];
+                    _textIndices = new Dictionary<string, int>(_textAttributes.Length);
+                    for (int i = 0; i < _textAttributes.Length; i++)
                     {
-                        _textIndices.Add(textNames[i], i - attributeCount);
+                        _textAttributes[i] = textNamesAndAttributes[i + languageAttributeCount].attribute;
+                        _textIndices.Add(textNamesAndAttributes[i + languageAttributeCount].name, i);
                     }
 
                     _languages = new (string, string[])[languageTypes.Count];
@@ -290,9 +295,9 @@ namespace UnityExtensions.Localization
                     {
                         _languages[i].type = languageTypes[i];
                         _languageIndices.Add(_languages[i].type, i);
-                        _languages[i].attributes = new string[attributeCount];
+                        _languages[i].attributes = new string[languageAttributeCount];
                         var textList = languageTexts[_languages[i].type];
-                        for (int j = 0; j < attributeCount; j++)
+                        for (int j = 0; j < languageAttributeCount; j++)
                         {
                             _languages[i].attributes[j] = textList[j];
                         }
@@ -310,8 +315,9 @@ namespace UnityExtensions.Localization
             {
                 LocalizationManager._languages = _languages;
                 LocalizationManager._languageIndices = _languageIndices;
-                LocalizationManager._attributeIndices = _attributeIndices;
+                LocalizationManager._languageAttributeIndices = _languageAttributeIndices;
                 LocalizationManager._textIndices = _textIndices;
+                LocalizationManager._textAttributes = _textAttributes;
                 _texts = null;
                 _state = -1;
             }
@@ -502,28 +508,39 @@ namespace UnityExtensions.Localization
 
 
         /// <summary>
-        /// Get the specific attribute of a language. You must call this after meta is loaded.
+        /// Get the attribute of the specific language. You must call this after meta is loaded.
         /// </summary>
         /// <param name="languageIndex"></param>
         /// <param name="attributeName"></param>
         /// <returns>'null' means no such attribute.</returns>
         public static string GetLanguageAttribute(int languageIndex, string attributeName)
         {
-            return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
+            return (attributeName != null && _languageAttributeIndices.TryGetValue(attributeName, out int index))
                 ? _languages[languageIndex].attributes[index] : null;
         }
 
 
         /// <summary>
-        /// Get the specific attribute of a language. You must call this after meta is loaded.
+        /// Get the attribute of the specific language. You must call this after meta is loaded.
         /// </summary>
         /// <param name="languageIndex"></param>
         /// <param name="attributeName"></param>
         /// <returns>'null' means no such attribute.</returns>
         public static string GetLanguageAttribute(string languageType, string attributeName)
         {
-            return (attributeName != null && _attributeIndices.TryGetValue(attributeName, out int index))
+            return (attributeName != null && _languageAttributeIndices.TryGetValue(attributeName, out int index))
                 ? _languages[_languageIndices[languageType]].attributes[index] : null;
+        }
+
+
+        /// <summary>
+        /// Get the attribute of the specific text. You must call this after meta is loaded.
+        /// </summary>
+        /// <param name="attributeName"></param>
+        /// <returns>'null' means no such text.</returns>
+        public static string GetTextAttribute(string textName)
+        {
+            return (textName != null && _textIndices.TryGetValue(textName, out int index)) ? _textAttributes[index] : null;
         }
 
 
@@ -547,6 +564,7 @@ namespace UnityExtensions.Localization
             return (textName != null && _textIndices.TryGetValue(textName, out int index)) ? _texts[index] : null;
         }
 
+
         /// <summary>
         /// Wait all tasks to be completed.
         /// </summary>
@@ -568,7 +586,7 @@ namespace UnityExtensions.Localization
                 }
             }
 
-            foreach (var c in _languages[_state].attributes[_attributeIndices[languageName]])
+            foreach (var c in _languages[_state].attributes[_languageAttributeIndices[languageName]])
             {
                 chars.Add(c);
             }
@@ -619,7 +637,7 @@ namespace UnityExtensions.Localization
 
             _languages = null;
             _languageIndices = null;
-            _attributeIndices = null;
+            _languageAttributeIndices = null;
             _textIndices = null;
             _texts = null;
 
