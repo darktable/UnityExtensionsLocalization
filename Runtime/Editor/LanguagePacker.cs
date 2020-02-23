@@ -475,6 +475,7 @@ namespace UnityExtensions.Localization.Editor
         }
 
 
+        [UnityEditor.MenuItem("Tools/Localization/Open Localization Folder")]
         public static void ShowSourceFolder()
         {
             Directory.CreateDirectory(sourceFolder);
