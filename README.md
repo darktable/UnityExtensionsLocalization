@@ -39,10 +39,10 @@ This package does not contain UI support directly, if you are looking for a comp
 
 ## Installation
 Unity can not install dependent packages automatically at present, you have to install them manually:
-- https://github.com/yuyang9119/UnityExtensionsCommon
-- https://github.com/yuyang9119/UnityExtensionsExcelDataReader
+- https://github.com/90-games/UnityExtensionsCommon
+- https://github.com/90-games/UnityExtensionsExcelDataReader
 
-Open the package manager window (menu: Window > Package Manager), select "Add package from git URL...", fill in this in the pop-up textbox: https://github.com/yuyang9119/UnityExtensionsLocalization.git.
+Open the package manager window (menu: Window > Package Manager), select "Add package from git URL...", fill in this in the pop-up textbox: https://github.com/90-games/UnityExtensionsLocalization.git.
 
 ## Quick Start
 1. Create a "Localization" folder in your project root directory, it is the same directory as the "Assets".
